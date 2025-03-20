@@ -1,0 +1,13 @@
+appId: com.videoeditor.app
+productName: Video Shorts Creator
+directories:
+  output: dist
+  buildResources: build
+files:
+  - "build/**/*"
+  - "node_modules/**/*"
+  - "package.json"
+  - "main.js"
+  - "preload.js"
+extraMetadata:
+  main: main.js

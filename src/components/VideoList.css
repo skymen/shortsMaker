@@ -1,0 +1,79 @@
+.video-list {
+  margin-top: 1rem;
+}
+
+.no-videos {
+  text-align: center;
+  margin: 2rem 0;
+  color: #7f8c8d;
+  font-style: italic;
+}
+
+.video-table {
+  width: 100%;
+  border-collapse: collapse;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background-color: white;
+}
+
+.video-table th,
+.video-table td {
+  padding: 0.8rem;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.video-table th {
+  background-color: #f2f2f2;
+  font-weight: bold;
+}
+
+.video-table tr:hover {
+  background-color: #f9f9f9;
+}
+
+.video-table tr.processed {
+  background-color: #e9f7ef;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status.processed {
+  color: #27ae60;
+}
+
+.status.not-processed {
+  color: #e74c3c;
+}
+
+.edit-button {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.edit-button:hover {
+  background-color: #2980b9;
+}
+
+.editor-content {
+  display: flex;
+  flex-direction: column;
+  flex: 2;
+}
+
+.all-content {
+  display: flex;
+  gap: 1rem;
+  flex-direction: row;
+}

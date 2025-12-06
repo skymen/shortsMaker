@@ -398,13 +398,31 @@ app.post("/api/youtube/upload-segment", async (req, res) => {
 
 // ============ START SERVER ============
 
-app.listen(PORT, () => {
+// Get local network IP
+function getLocalIP() {
+  const { networkInterfaces } = require("os");
+  const nets = networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === "IPv4" && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return "localhost";
+}
+
+const HOST = "0.0.0.0"; // Listen on all network interfaces
+const localIP = getLocalIP();
+
+app.listen(PORT, HOST, () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════╗
 ║                                                       ║
 ║   🎬 Shorts Maker v2 Server Running                   ║
 ║                                                       ║
-║   Local:  http://localhost:${PORT}                      ║
+║   Local:    http://localhost:${PORT}                    ║
+║   Network:  http://${localIP}:${PORT}                  ║
 ║                                                       ║
 ║   Make sure you have set up your .env file with:      ║
 ║   - YOUTUBE_CLIENT_ID                                 ║

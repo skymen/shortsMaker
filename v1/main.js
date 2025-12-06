@@ -29,7 +29,7 @@ function createWindow() {
   // If not available (production build), load from local file
   const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
   const startUrl = isDev
-    ? "http://localhost:3000"
+    ? `http://localhost:${process.env.PORT}`
     : `file://${path.join(__dirname, "./build/index.html")}`;
 
   mainWindow.loadURL(startUrl);
@@ -134,6 +134,8 @@ ipcMain.handle(
 // Get saved seams for a video
 ipcMain.handle("get-seams", async (event, videoPath) => {
   const savedVideos = store.get("videos") || {};
+  console.log("Getting saved seams for video:", videoPath);
+  console.log("Saved seams:", savedVideos[videoPath]);
   return savedVideos[videoPath] || null;
 });
 
@@ -200,14 +202,14 @@ async function processVideo(video, savedVideos) {
 
   // Extract chapter and lesson from filename
   const filename = path.basename(video.path, path.extname(video.path));
-  const match =
-    filename.match(/Chapter\s*(\d+)\s*Lecon\s*(\d+)/i) ||
-    filename.match(/Chapitre\s*(\d+)\s*Leçon\s*(\d+)/i);
+
+  const match = filename.match(/[^\s]*\s*(\d+)\s*[^\s]*\s*(\d+)/i);
 
   let chapterInfo = "";
   if (match) {
     chapterInfo = `Chapitre ${match[1]} Leçon ${match[2]}`;
   }
+  console.log(filename, chapterInfo);
 
   // Process each segment
   const segments = [];
@@ -220,10 +222,16 @@ async function processVideo(video, savedVideos) {
     // Use custom name if available, otherwise use default
     const partName = textOverlays[i] || defaultPartNames[i] || `Partie${i + 1}`;
     // Clean the name for filename (remove special characters)
-    const safePartName = partName.replace(/[^a-zA-Z0-9 É]/g, "_");
+    const safePartName = partName;
+
+    //mkdir for each chapter
+    const chapterDir = path.join(outputDir, chapterInfo);
+    if (!fs.existsSync(chapterDir)) {
+      fs.mkdirSync(chapterDir, { recursive: true });
+    }
 
     const outputPath = path.join(
-      outputDir,
+      chapterDir,
       `${chapterInfo} Partie ${i + 1} ${safePartName}${path.extname(
         video.path
       )}`
@@ -243,6 +251,8 @@ async function processVideo(video, savedVideos) {
       partName: segmentNames[i] || partName,
     });
   }
+
+  console.log(segments);
 
   try {
     // Process each segment

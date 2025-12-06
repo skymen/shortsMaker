@@ -4,9 +4,9 @@
   "description": "An application to create shorts from educational videos",
   "main": "main.js",
   "scripts": {
-    "start": "concurrently \"npm run start:react\" \"npm run start:electron\"",
+    "start": "PORT=3030 concurrently \"npm run start:react\" \"npm run start:electron\"",
     "start:react": "cross-env BROWSER=none react-scripts start",
-    "start:electron": "wait-on http://localhost:3000 && electron .",
+    "start:electron": "wait-on http://localhost:3030 && electron .",
     "build": "react-scripts build && electron-builder",
     "postinstall": "electron-builder install-app-deps"
   },

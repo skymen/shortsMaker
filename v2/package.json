@@ -5,7 +5,9 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "node --watch server/index.js"
+    "dev": "node --watch server/index.js",
+    "deploy": "bash scripts/deploy.sh",
+    "setup-server": "bash scripts/setup-server.sh"
   },
   "dependencies": {
     "cors": "^2.8.5",

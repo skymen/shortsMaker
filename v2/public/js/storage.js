@@ -1,14 +1,15 @@
 /**
  * LocalStorage Manager for Shorts Maker v2
- * Stores seams data per YouTube video ID and tracks finished videos
+ * Stores seams data per YouTube video ID and tracks finished/ignored videos
  */
 
 const StorageManager = {
   KEYS: {
-    VIDEOS_DATA: 'shorts_maker_videos',
-    FINISHED_VIDEOS: 'shorts_maker_finished',
-    SELECTED_CHANNEL: 'shorts_maker_channel',
-    SETTINGS: 'shorts_maker_settings'
+    VIDEOS_DATA: "shorts_maker_videos",
+    FINISHED_VIDEOS: "shorts_maker_finished",
+    IGNORED_VIDEOS: "shorts_maker_ignored",
+    SELECTED_CHANNEL: "shorts_maker_channel",
+    SETTINGS: "shorts_maker_settings",
   },
 
   /**
@@ -19,7 +20,7 @@ const StorageManager = {
       const data = localStorage.getItem(this.KEYS.VIDEOS_DATA);
       return data ? JSON.parse(data) : {};
     } catch (e) {
-      console.error('Error reading videos data:', e);
+      console.error("Error reading videos data:", e);
       return {};
     }
   },
@@ -39,13 +40,13 @@ const StorageManager = {
     const allData = this.getAllVideosData();
     allData[videoId] = {
       ...data,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
     try {
       localStorage.setItem(this.KEYS.VIDEOS_DATA, JSON.stringify(allData));
       return true;
     } catch (e) {
-      console.error('Error saving video data:', e);
+      console.error("Error saving video data:", e);
       return false;
     }
   },
@@ -59,7 +60,7 @@ const StorageManager = {
       ...existingData,
       seams,
       segmentNames,
-      textOverlays
+      textOverlays,
     });
   },
 
@@ -68,12 +69,16 @@ const StorageManager = {
    */
   getSeams(videoId) {
     const data = this.getVideoData(videoId);
-    return data ? {
-      seams: data.seams || [],
-      segmentNames: data.segmentNames || [],
-      textOverlays: data.textOverlays || []
-    } : null;
+    return data
+      ? {
+          seams: data.seams || [],
+          segmentNames: data.segmentNames || [],
+          textOverlays: data.textOverlays || [],
+        }
+      : null;
   },
+
+  // ============ FINISHED VIDEOS ============
 
   /**
    * Get list of finished video IDs
@@ -83,7 +88,7 @@ const StorageManager = {
       const data = localStorage.getItem(this.KEYS.FINISHED_VIDEOS);
       return data ? JSON.parse(data) : [];
     } catch (e) {
-      console.error('Error reading finished videos:', e);
+      console.error("Error reading finished videos:", e);
       return [];
     }
   },
@@ -103,10 +108,13 @@ const StorageManager = {
     if (!finished.includes(videoId)) {
       finished.push(videoId);
       try {
-        localStorage.setItem(this.KEYS.FINISHED_VIDEOS, JSON.stringify(finished));
+        localStorage.setItem(
+          this.KEYS.FINISHED_VIDEOS,
+          JSON.stringify(finished)
+        );
         return true;
       } catch (e) {
-        console.error('Error marking video finished:', e);
+        console.error("Error marking video finished:", e);
         return false;
       }
     }
@@ -118,12 +126,12 @@ const StorageManager = {
    */
   unmarkVideoFinished(videoId) {
     let finished = this.getFinishedVideos();
-    finished = finished.filter(id => id !== videoId);
+    finished = finished.filter((id) => id !== videoId);
     try {
       localStorage.setItem(this.KEYS.FINISHED_VIDEOS, JSON.stringify(finished));
       return true;
     } catch (e) {
-      console.error('Error unmarking video:', e);
+      console.error("Error unmarking video:", e);
       return false;
     }
   },
@@ -141,15 +149,88 @@ const StorageManager = {
     }
   },
 
+  // ============ IGNORED VIDEOS ============
+
+  /**
+   * Get list of ignored video IDs
+   */
+  getIgnoredVideos() {
+    try {
+      const data = localStorage.getItem(this.KEYS.IGNORED_VIDEOS);
+      return data ? JSON.parse(data) : [];
+    } catch (e) {
+      console.error("Error reading ignored videos:", e);
+      return [];
+    }
+  },
+
+  /**
+   * Check if a video is marked as ignored
+   */
+  isVideoIgnored(videoId) {
+    return this.getIgnoredVideos().includes(videoId);
+  },
+
+  /**
+   * Mark a video as ignored
+   */
+  markVideoIgnored(videoId) {
+    const ignored = this.getIgnoredVideos();
+    if (!ignored.includes(videoId)) {
+      ignored.push(videoId);
+      try {
+        localStorage.setItem(this.KEYS.IGNORED_VIDEOS, JSON.stringify(ignored));
+        return true;
+      } catch (e) {
+        console.error("Error marking video ignored:", e);
+        return false;
+      }
+    }
+    return true;
+  },
+
+  /**
+   * Unmark a video as ignored
+   */
+  unmarkVideoIgnored(videoId) {
+    let ignored = this.getIgnoredVideos();
+    ignored = ignored.filter((id) => id !== videoId);
+    try {
+      localStorage.setItem(this.KEYS.IGNORED_VIDEOS, JSON.stringify(ignored));
+      return true;
+    } catch (e) {
+      console.error("Error unmarking video ignored:", e);
+      return false;
+    }
+  },
+
+  /**
+   * Toggle video ignored status
+   */
+  toggleVideoIgnored(videoId) {
+    if (this.isVideoIgnored(videoId)) {
+      this.unmarkVideoIgnored(videoId);
+      return false;
+    } else {
+      this.markVideoIgnored(videoId);
+      return true;
+    }
+  },
+
+  // ============ CHANNEL ============
+
   /**
    * Save selected channel
    */
   saveSelectedChannel(channel) {
     try {
-      localStorage.setItem(this.KEYS.SELECTED_CHANNEL, JSON.stringify(channel));
+      localStorage.setItem(
+        this.KEYS.SELECTED_CHANNEL,
+        JSON.stringify(channel)
+      );
       return true;
     } catch (e) {
-      console.error('Error saving channel:', e);
+      console.error("Error saving channel:", e);
       return false;
     }
   },
@@ -162,7 +243,7 @@ const StorageManager = {
       const data = localStorage.getItem(this.KEYS.SELECTED_CHANNEL);
       return data ? JSON.parse(data) : null;
     } catch (e) {
-      console.error('Error reading channel:', e);
+      console.error("Error reading channel:", e);
       return null;
     }
   },
@@ -174,16 +255,21 @@ const StorageManager = {
     localStorage.removeItem(this.KEYS.SELECTED_CHANNEL);
   },
 
+  // ============ SETTINGS ============
+
   /**
    * Save settings
    */
   saveSettings(settings) {
     try {
       const existing = this.getSettings();
-      localStorage.setItem(this.KEYS.SETTINGS, JSON.stringify({ ...existing, ...settings }));
+      localStorage.setItem(
+        this.KEYS.SETTINGS,
+        JSON.stringify({ ...existing, ...settings })
+      );
       return true;
     } catch (e) {
-      console.error('Error saving settings:', e);
+      console.error("Error saving settings:", e);
       return false;
     }
   },
@@ -194,19 +280,23 @@ const StorageManager = {
   getSettings() {
     try {
       const data = localStorage.getItem(this.KEYS.SETTINGS);
-      return data ? JSON.parse(data) : {
-        defaultPrivacy: 'private',
-        titleTemplate: '{title} - Part {n}',
-        defaultTags: ''
-      };
+      return data
+        ? JSON.parse(data)
+        : {
+            defaultPrivacy: "private",
+            titleTemplate: "{title} - Part {n}",
+            defaultTags: "",
+          };
     } catch (e) {
       return {
-        defaultPrivacy: 'private',
-        titleTemplate: '{title} - Part {n}',
-        defaultTags: ''
+        defaultPrivacy: "private",
+        titleTemplate: "{title} - Part {n}",
+        defaultTags: "",
       };
     }
   },
+
+  // ============ UTILITIES ============
 
   /**
    * Get storage statistics
@@ -214,11 +304,13 @@ const StorageManager = {
   getStats() {
     const videosData = this.getAllVideosData();
     const finishedVideos = this.getFinishedVideos();
-    
+    const ignoredVideos = this.getIgnoredVideos();
+
     return {
       totalVideos: Object.keys(videosData).length,
       finishedVideos: finishedVideos.length,
-      storageUsed: this.getStorageSize()
+      ignoredVideos: ignoredVideos.length,
+      storageUsed: this.getStorageSize(),
     };
   },
 
@@ -243,9 +335,10 @@ const StorageManager = {
     return {
       videos: this.getAllVideosData(),
       finished: this.getFinishedVideos(),
+      ignored: this.getIgnoredVideos(),
       channel: this.getSelectedChannel(),
       settings: this.getSettings(),
-      exportedAt: new Date().toISOString()
+      exportedAt: new Date().toISOString(),
     };
   },
 
@@ -255,20 +348,35 @@ const StorageManager = {
   importData(data) {
     try {
       if (data.videos) {
-        localStorage.setItem(this.KEYS.VIDEOS_DATA, JSON.stringify(data.videos));
+        localStorage.setItem(
+          this.KEYS.VIDEOS_DATA,
+          JSON.stringify(data.videos)
+        );
       }
       if (data.finished) {
-        localStorage.setItem(this.KEYS.FINISHED_VIDEOS, JSON.stringify(data.finished));
+        localStorage.setItem(
+          this.KEYS.FINISHED_VIDEOS,
+          JSON.stringify(data.finished)
+        );
+      }
+      if (data.ignored) {
+        localStorage.setItem(
+          this.KEYS.IGNORED_VIDEOS,
+          JSON.stringify(data.ignored)
+        );
       }
       if (data.channel) {
-        localStorage.setItem(this.KEYS.SELECTED_CHANNEL, JSON.stringify(data.channel));
+        localStorage.setItem(
+          this.KEYS.SELECTED_CHANNEL,
+          JSON.stringify(data.channel)
+        );
       }
       if (data.settings) {
         localStorage.setItem(this.KEYS.SETTINGS, JSON.stringify(data.settings));
       }
       return true;
     } catch (e) {
-      console.error('Error importing data:', e);
+      console.error("Error importing data:", e);
       return false;
     }
   },
@@ -280,9 +388,8 @@ const StorageManager = {
     for (const key of Object.values(this.KEYS)) {
       localStorage.removeItem(key);
     }
-  }
+  },
 };
 
 // Make available globally
 window.StorageManager = StorageManager;
-

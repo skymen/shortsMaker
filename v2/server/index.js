@@ -235,11 +235,109 @@ app.get("/api/youtube/video/:videoId", async (req, res) => {
 
 // ============ VIDEO PROCESSING ROUTES ============
 
-// Process video segments
-app.post("/api/process", async (req, res) => {
-  const { videoId, videoUrl, seams, segmentNames, textOverlays } = req.body;
+// Helper function to download YouTube video segment
+async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
+  const { exec } = require("child_process");
+  const util = require("util");
+  const execPromise = util.promisify(exec);
 
-  if (!videoUrl || !seams || seams.length < 2) {
+  const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const duration = endTime - startTime;
+
+  // First, get the direct video URL using yt-dlp
+  try {
+    const { stdout: videoUrl } = await execPromise(
+      `yt-dlp -f "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best" -g "${youtubeUrl}"`,
+      { timeout: 30000 }
+    );
+
+    const urls = videoUrl.trim().split("\n");
+    const videoStreamUrl = urls[0];
+    const audioStreamUrl = urls[1] || urls[0];
+
+    // Use ffmpeg to download and cut the segment
+    return new Promise((resolve, reject) => {
+      let command = ffmpeg();
+
+      // Add video stream with seek
+      command = command
+        .input(videoStreamUrl)
+        .inputOptions([`-ss ${startTime}`]);
+
+      // Add audio stream if separate
+      if (urls.length > 1) {
+        command = command
+          .input(audioStreamUrl)
+          .inputOptions([`-ss ${startTime}`]);
+      }
+
+      command
+        .outputOptions([
+          `-t ${duration}`,
+          "-c:v libx264",
+          "-c:a aac",
+          "-preset fast",
+          "-crf 23",
+          "-movflags +faststart",
+          "-y",
+        ])
+        .output(outputPath)
+        .on("start", (cmd) => console.log("FFmpeg started:", cmd))
+        .on("progress", (progress) =>
+          console.log("Processing:", progress.percent?.toFixed(1) + "%")
+        )
+        .on("end", () => resolve(outputPath))
+        .on("error", (err) => reject(err))
+        .run();
+    });
+  } catch (error) {
+    console.error("yt-dlp error:", error);
+    throw new Error(
+      "Failed to get video URL. Make sure yt-dlp is installed: brew install yt-dlp"
+    );
+  }
+}
+
+// Process single segment (for preview)
+app.post("/api/process", async (req, res) => {
+  const { videoId, startTime, endTime, segmentIndex } = req.body;
+
+  if (!videoId || startTime === undefined || endTime === undefined) {
+    return res.status(400).json({ error: "Invalid request data" });
+  }
+
+  const outputFilename = `${videoId}_segment_${
+    segmentIndex || 1
+  }_${Date.now()}.mp4`;
+  const outputPath = path.join(outputDir, outputFilename);
+
+  try {
+    console.log(
+      `Processing segment: ${videoId} from ${startTime}s to ${endTime}s`
+    );
+
+    await downloadYouTubeSegment(videoId, startTime, endTime, outputPath);
+
+    res.json({
+      success: true,
+      outputPath: outputPath,
+      filename: outputFilename,
+      duration: endTime - startTime,
+    });
+  } catch (error) {
+    console.error("Processing error:", error);
+    res.status(500).json({
+      error: "Failed to process video",
+      details: error.message,
+    });
+  }
+});
+
+// Process all segments for a video
+app.post("/api/process-all", async (req, res) => {
+  const { videoId, seams, segmentNames } = req.body;
+
+  if (!videoId || !seams || seams.length < 2) {
     return res.status(400).json({ error: "Invalid request data" });
   }
 
@@ -255,36 +353,21 @@ app.post("/api/process", async (req, res) => {
       const endTime = seams[i + 1].time;
       const duration = endTime - startTime;
       const segmentName = segmentNames?.[i] || `Segment ${i + 1}`;
-      const outputPath = path.join(
-        jobOutputDir,
-        `${videoId}_segment_${i + 1}.mp4`
-      );
+      const outputFilename = `${videoId}_segment_${i + 1}.mp4`;
+      const outputPath = path.join(jobOutputDir, outputFilename);
 
-      await new Promise((resolve, reject) => {
-        ffmpeg(videoUrl)
-          .setStartTime(startTime)
-          .setDuration(duration)
-          .outputOptions([
-            "-c:v libx264",
-            "-c:a aac",
-            "-preset fast",
-            "-crf 23",
-          ])
-          .output(outputPath)
-          .on("end", () => {
-            results.push({
-              index: i,
-              name: segmentName,
-              path: outputPath,
-              relativePath: `/output/${jobId}/${path.basename(outputPath)}`,
-              duration,
-              startTime,
-              endTime,
-            });
-            resolve();
-          })
-          .on("error", reject)
-          .run();
+      console.log(`Processing segment ${i + 1}: ${startTime}s to ${endTime}s`);
+
+      await downloadYouTubeSegment(videoId, startTime, endTime, outputPath);
+
+      results.push({
+        index: i,
+        name: segmentName,
+        path: outputPath,
+        relativePath: `/output/${jobId}/${outputFilename}`,
+        duration,
+        startTime,
+        endTime,
       });
     }
 
@@ -295,7 +378,10 @@ app.post("/api/process", async (req, res) => {
     });
   } catch (error) {
     console.error("Processing error:", error);
-    res.status(500).json({ error: "Failed to process video" });
+    res.status(500).json({
+      error: "Failed to process video",
+      details: error.message,
+    });
   }
 });
 

@@ -10,11 +10,22 @@ const { v4: uuidv4 } = require("uuid");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const BASE_URL =
+  process.env.BASE_URL ||
+  (IS_PRODUCTION
+    ? "https://shorts-maker.dedragames.com"
+    : `http://localhost:${PORT}`);
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../public")));
+
+// Trust proxy for correct protocol detection behind nginx
+if (IS_PRODUCTION) {
+  app.set("trust proxy", 1);
+}
 
 // Create temp and output directories
 const tempDir = path.join(__dirname, "../temp");
@@ -33,7 +44,7 @@ const upload = multer({ storage });
 const oauth2Client = new google.auth.OAuth2(
   process.env.YOUTUBE_CLIENT_ID,
   process.env.YOUTUBE_CLIENT_SECRET,
-  `http://localhost:${PORT}/auth/callback`
+  `${BASE_URL}/auth/callback`
 );
 
 const youtube = google.youtube({ version: "v3", auth: oauth2Client });
@@ -416,10 +427,23 @@ const HOST = "0.0.0.0"; // Listen on all network interfaces
 const localIP = getLocalIP();
 
 app.listen(PORT, HOST, () => {
-  console.log(`
+  if (IS_PRODUCTION) {
+    console.log(`
 ╔═══════════════════════════════════════════════════════╗
 ║                                                       ║
-║   🎬 Shorts Maker v2 Server Running                   ║
+║   🎬 Shorts Maker v2 - PRODUCTION                     ║
+║                                                       ║
+║   URL:      ${BASE_URL.padEnd(36)}║
+║   Port:     ${String(PORT).padEnd(36)}║
+║   OAuth:    ${(BASE_URL + "/auth/callback").padEnd(36).substring(0, 36)}║
+║                                                       ║
+╚═══════════════════════════════════════════════════════╝
+    `);
+  } else {
+    console.log(`
+╔═══════════════════════════════════════════════════════╗
+║                                                       ║
+║   🎬 Shorts Maker v2 - DEVELOPMENT                    ║
 ║                                                       ║
 ║   Local:    http://localhost:${PORT}                    ║
 ║   Network:  http://${localIP}:${PORT}                  ║
@@ -430,5 +454,6 @@ app.listen(PORT, HOST, () => {
 ║   - YOUTUBE_API_KEY                                   ║
 ║                                                       ║
 ╚═══════════════════════════════════════════════════════╝
-  `);
+    `);
+  }
 });

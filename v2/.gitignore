@@ -1,4 +1,9 @@
 node_modules/
 .env
+.env.local
+.env.production
 temp/
 output/
+*.log
+.DS_Store
+package-lock.json

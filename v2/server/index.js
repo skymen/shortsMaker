@@ -360,16 +360,37 @@ async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
     if (!fs.existsSync(cachedVideoPath)) {
       console.log(`Downloading full video: ${videoId}`);
 
-      const format =
-        "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best/best";
-      const downloadCmd = ytdlpCmd(
-        format,
-        youtubeUrl,
-        `--merge-output-format mp4 -o "${cachedVideoPath}"`
-      );
+      // Try multiple format options - iOS client has different formats available
+      const formats = [
+        "best[height<=720]", // Simple format that works with iOS client
+        "bestvideo[height<=720]+bestaudio/best",
+        "best", // Fallback to any format
+      ];
 
-      await execPromise(downloadCmd, { timeout: 600000 }); // 10 min timeout
-      console.log("Full video downloaded successfully");
+      let downloaded = false;
+      for (const format of formats) {
+        try {
+          console.log(`Trying format: ${format}`);
+          const downloadCmd = ytdlpCmd(
+            format,
+            youtubeUrl,
+            `--merge-output-format mp4 -o "${cachedVideoPath}"`
+          );
+          await execPromise(downloadCmd, { timeout: 600000 }); // 10 min timeout
+          downloaded = true;
+          console.log(
+            "Full video downloaded successfully with format:",
+            format
+          );
+          break;
+        } catch (e) {
+          console.log(`Format ${format} failed:`, e.message?.substring(0, 100));
+        }
+      }
+
+      if (!downloaded) {
+        throw new Error("All download formats failed");
+      }
     } else {
       console.log("Using cached video:", cachedVideoPath);
     }

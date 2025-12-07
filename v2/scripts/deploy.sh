@@ -44,34 +44,24 @@ set -e
 cd /var/www/shorts-maker
 
 # Ensure yt-dlp is installed and updated (required for video downloads)
-echo "📥 Updating yt-dlp..."
+echo "📥 Updating yt-dlp to latest version..."
 curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
 chmod a+rx /usr/local/bin/yt-dlp
 yt-dlp --version
 
-# Install PhantomJS for YouTube's JavaScript challenge solving
-echo "📥 Installing PhantomJS (JavaScript runtime for yt-dlp)..."
-if ! command -v phantomjs &> /dev/null; then
-    apt-get update -qq
-    apt-get install -y -qq phantomjs || {
-        # Manual install if apt fails
-        cd /tmp
-        curl -L -o phantomjs.tar.bz2 https://bitbucket.org/nickel715/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2
-        tar xjf phantomjs.tar.bz2
-        cp phantomjs-2.1.1-linux-x86_64/bin/phantomjs /usr/local/bin/
-        rm -rf phantomjs* 
-    }
-fi
-phantomjs --version || echo "PhantomJS not available"
-
-# Configure yt-dlp 
+# Configure yt-dlp to use iOS client (bypasses JS challenge)
 echo "⚙️ Configuring yt-dlp..."
 mkdir -p ~/.config/yt-dlp
 cat > ~/.config/yt-dlp/config << 'YTDLPCONFIG'
-# Fallback options for YouTube
+# Use iOS client to bypass JavaScript n-parameter challenge
 --extractor-args youtube:player_client=ios,web
---no-check-certificates
+# Reduce logging noise
+--no-warnings
 YTDLPCONFIG
+
+# Test yt-dlp can access YouTube
+echo "🧪 Testing yt-dlp..."
+yt-dlp --cookies /var/www/shorts-maker/cookies.txt --extractor-args "youtube:player_client=ios" -F "https://www.youtube.com/watch?v=dQw4w9WgXcQ" 2>&1 | head -20 || echo "Test complete (may show errors if no cookies)"
 
 # Create videos directory for downloaded videos
 mkdir -p videos

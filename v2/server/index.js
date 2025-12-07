@@ -7,6 +7,8 @@ const { google } = require("googleapis");
 const multer = require("multer");
 const ffmpeg = require("fluent-ffmpeg");
 const { v4: uuidv4 } = require("uuid");
+const sharp = require("sharp");
+const { execSync } = require("child_process");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -263,6 +265,235 @@ function ytdlpCmd(format, url, extraArgs = "") {
   return `${ytdlpPath} ${cookiesArg} -f "${format}" ${extraArgs} "${url}"`;
 }
 
+// ============ TEXT OVERLAY FUNCTION (ported from v1) ============
+/**
+ * Creates a video with text overlay - exact port from v1/addAnimatedText.js
+ * With fade in/out and slide effects
+ */
+async function createVideoWithTextOverlay(config) {
+  // Set default values (same as v1)
+  const defaults = {
+    tempDir: tempDir,
+    fontFamily: "sans-serif",
+    fontWeight: "bold",
+    fontSize: 40,
+    fontColor: "white",
+    textAlign: "center",
+    rectColor: "rgba(0, 0, 0, 0.6)",
+    rectPadding: 20,
+    rectRadius: 10,
+    startTime: 0,
+    duration: 5,
+    fadeInDuration: 1,
+    fadeOutDuration: 1,
+    slideDistance: 50,
+  };
+
+  // Merge defaults with provided config
+  config = { ...defaults, ...config };
+
+  // Calculate the total duration if stayDuration is used
+  if (config.stayDuration) {
+    config.duration =
+      config.fadeInDuration + config.stayDuration + config.fadeOutDuration;
+  }
+
+  // Validate required parameters
+  if (!config.inputVideoPath || !config.outputVideoPath || !config.text) {
+    throw new Error("inputVideoPath, outputVideoPath, and text are required");
+  }
+
+  // Make sure fade durations don't exceed total duration
+  if (config.fadeInDuration + config.fadeOutDuration > config.duration) {
+    const totalFadeDuration = config.duration * 0.8;
+    const ratio =
+      config.fadeInDuration / (config.fadeInDuration + config.fadeOutDuration);
+    config.fadeInDuration = totalFadeDuration * ratio;
+    config.fadeOutDuration = totalFadeDuration * (1 - ratio);
+  }
+
+  // Create temp directory if needed
+  if (!fs.existsSync(config.tempDir)) {
+    fs.mkdirSync(config.tempDir, { recursive: true });
+  }
+
+  // Get video dimensions using ffprobe
+  console.log("Getting video dimensions...");
+  const videoInfoCmd = `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 "${config.inputVideoPath}"`;
+  const dimensions = execSync(videoInfoCmd).toString().trim().split("x");
+  const videoWidth = parseInt(dimensions[0]);
+  const videoHeight = parseInt(dimensions[1]);
+
+  // Create SVG with text and rounded rectangle
+  const textLines = config.text.split("\n");
+
+  // Estimate text dimensions
+  const charWidth = config.fontSize * 0.6;
+  const lineHeight = config.fontSize * 1.2;
+  const textWidth = Math.max(
+    ...textLines.map((line) => line.length * charWidth)
+  );
+  const textHeight = lineHeight * textLines.length;
+
+  // Calculate text position if not specified
+  if (!config.textX) {
+    config.textX = videoWidth / 2;
+  }
+  if (!config.textY) {
+    config.textY = videoHeight / 2;
+  }
+
+  // Calculate rectangle dimensions
+  const rectWidth = textWidth + config.rectPadding * 2;
+  const rectHeight = textHeight + config.rectPadding * 2;
+
+  // Calculate rectangle position based on text alignment
+  let rectX;
+  switch (config.textAlign) {
+    case "left":
+      rectX = config.textX;
+      break;
+    case "right":
+      rectX = config.textX - rectWidth;
+      break;
+    default: // center
+      rectX = config.textX - rectWidth / 2;
+      break;
+  }
+  const rectY = config.textY - rectHeight / 2;
+
+  // Create SVG with text and rounded rectangle (exact v1 format)
+  const textSvg = `<svg width="${videoWidth}" height="${videoHeight}" xmlns="http://www.w3.org/2000/svg">
+    <rect
+      x="${rectX}"
+      y="${rectY}"
+      width="${rectWidth}"
+      height="${rectHeight}"
+      rx="${config.rectRadius}"
+      ry="${config.rectRadius}"
+      fill="${config.rectColor}"
+    />
+    ${textLines
+      .map((line, i) => {
+        const yPos =
+          rectY + config.rectPadding + i * lineHeight + config.fontSize * 0.8;
+        let xPos;
+        switch (config.textAlign) {
+          case "left":
+            xPos = rectX + config.rectPadding;
+            break;
+          case "right":
+            xPos = rectX + rectWidth - config.rectPadding;
+            break;
+          default: // center
+            xPos = rectX + rectWidth / 2;
+            break;
+        }
+        return `<text
+        x="${xPos}"
+        y="${yPos}"
+        font-family="${config.fontFamily}"
+        font-size="${config.fontSize}px"
+        font-weight="${config.fontWeight}"
+        fill="${config.fontColor}"
+        text-anchor="${
+          config.textAlign === "left"
+            ? "start"
+            : config.textAlign === "right"
+            ? "end"
+            : "middle"
+        }"
+      >${escapeXml(line)}</text>`;
+      })
+      .join("\n")}
+  </svg>`;
+
+  // Save SVG to temp file
+  const svgPath = path.join(config.tempDir, `text_overlay_${Date.now()}.svg`);
+  fs.writeFileSync(svgPath, textSvg);
+
+  // Convert SVG to PNG with transparency using sharp
+  const overlayImagePath = path.join(
+    config.tempDir,
+    `text_overlay_${Date.now()}.png`
+  );
+  console.log(`Creating overlay image...`);
+  await sharp(Buffer.from(textSvg)).png().toFile(overlayImagePath);
+
+  console.log("Applying overlay to video with fade effects...");
+
+  // Helper function to get video duration
+  function getVideoDuration(videoPath) {
+    try {
+      const durationCmd = `ffprobe -v error -show_entries format=duration -of csv=p=0 "${videoPath}"`;
+      return parseFloat(execSync(durationCmd).toString().trim()) || 0;
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  try {
+    const fadeInStartTime = config.startTime;
+    const fadeInAnimDuration = config.fadeInDuration;
+    const fadeOutStartTime =
+      config.startTime + config.duration - config.fadeOutDuration;
+    const fadeOutAnimDuration = config.fadeOutDuration;
+    const slideDistance = config.slideDistance;
+
+    // Build overlay filter (exact v1 format)
+    const filterComplex = `
+      [1:v]format=rgba,
+      fade=t=in:st=0:d=${fadeInAnimDuration}:alpha=1,
+      fade=t=out:st=${
+        config.duration - fadeOutAnimDuration
+      }:d=${fadeOutAnimDuration}:alpha=1
+      [faded];
+      [0:v][faded]overlay=
+        0:
+        'if(between(t,${fadeInStartTime},${
+      fadeInStartTime + fadeInAnimDuration
+    }),
+          ${-slideDistance}+(t-${fadeInStartTime})/${fadeInAnimDuration}*${slideDistance},
+          if(between(t,${fadeOutStartTime},${
+      fadeOutStartTime + fadeOutAnimDuration
+    }),
+            (t-${fadeOutStartTime})/${fadeOutAnimDuration}*${slideDistance},
+            0)
+        )':
+        enable='between(t,${fadeInStartTime},${
+      fadeOutStartTime + fadeOutAnimDuration
+    })'
+    `.replace(/\n\s+/g, "");
+
+    // FFmpeg command (exact v1 format)
+    const ffmpegCmd = `ffmpeg -y -i "${
+      config.inputVideoPath
+    }" -loop 1 -i "${overlayImagePath}" -filter_complex "${filterComplex}" -map 0:a? -c:a copy -shortest -t ${Math.max(
+      config.startTime + config.duration,
+      getVideoDuration(config.inputVideoPath)
+    )} "${config.outputVideoPath}"`;
+
+    execSync(ffmpegCmd, { stdio: "pipe", maxBuffer: 50 * 1024 * 1024 });
+    console.log(`Video with text overlay saved to ${config.outputVideoPath}`);
+
+    // Clean up temporary files
+    if (fs.existsSync(svgPath)) fs.unlinkSync(svgPath);
+    if (fs.existsSync(overlayImagePath)) fs.unlinkSync(overlayImagePath);
+  } catch (error) {
+    console.error("Error processing video:", error);
+    throw error;
+  }
+}
+
+function escapeXml(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 // Track download progress
 const downloadProgress = new Map();
 
@@ -444,11 +675,15 @@ async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
   }
 }
 
-// Generate cache key for segments (rounded to 2 decimal places)
-function getSegmentCacheKey(videoId, startTime, endTime) {
+// Generate cache key for segments (includes text overlay hash for uniqueness)
+function getSegmentCacheKey(videoId, startTime, endTime, textOverlay = "") {
   const start = Math.round(startTime * 100) / 100;
   const end = Math.round(endTime * 100) / 100;
-  return `${videoId}_${start}_${end}`;
+  // Simple hash for text overlay
+  const textHash = textOverlay
+    ? "_t" + Buffer.from(textOverlay).toString("base64").slice(0, 8)
+    : "";
+  return `${videoId}_${start}_${end}${textHash}`;
 }
 
 // Create segments cache directory
@@ -457,16 +692,21 @@ if (!fs.existsSync(segmentsCacheDir)) {
   fs.mkdirSync(segmentsCacheDir, { recursive: true });
 }
 
-// Process single segment (for preview) - with server-side caching
+// Process single segment (for preview) - with server-side caching and optional text overlay
 app.post("/api/process", async (req, res) => {
-  const { videoId, startTime, endTime, segmentIndex } = req.body;
+  const { videoId, startTime, endTime, segmentIndex, textOverlay } = req.body;
 
   if (!videoId || startTime === undefined || endTime === undefined) {
     return res.status(400).json({ error: "Invalid request data" });
   }
 
-  // Generate cache key and check if segment already exists
-  const cacheKey = getSegmentCacheKey(videoId, startTime, endTime);
+  // Generate cache key (includes text overlay for uniqueness)
+  const cacheKey = getSegmentCacheKey(
+    videoId,
+    startTime,
+    endTime,
+    textOverlay || ""
+  );
   const cachedFilename = `${cacheKey}.mp4`;
   const cachedPath = path.join(segmentsCacheDir, cachedFilename);
 
@@ -484,10 +724,42 @@ app.post("/api/process", async (req, res) => {
 
   try {
     console.log(
-      `Processing segment: ${videoId} from ${startTime}s to ${endTime}s`
+      `Processing segment: ${videoId} from ${startTime}s to ${endTime}s` +
+        (textOverlay ? ` with overlay: "${textOverlay}"` : "")
     );
 
-    await downloadYouTubeSegment(videoId, startTime, endTime, cachedPath);
+    // First, cut the segment
+    const tempSegmentPath = path.join(tempDir, `segment_${Date.now()}.mp4`);
+    await downloadYouTubeSegment(videoId, startTime, endTime, tempSegmentPath);
+
+    // Apply text overlay if provided
+    if (textOverlay && textOverlay.trim()) {
+      console.log("Applying text overlay...");
+      await createVideoWithTextOverlay({
+        inputVideoPath: tempSegmentPath,
+        outputVideoPath: cachedPath,
+        text: textOverlay.replace(/\\n/g, "\n"), // Support \n in input
+        tempDir: tempDir,
+        fontFamily: "Raleway",
+        fontWeight: "bold",
+        fontSize: 60,
+        fontColor: "#FFFFFF",
+        textAlign: "center",
+        rectColor: "rgba(33, 150, 243, 0.8)", // Blue background like v1
+        rectPadding: 30,
+        rectRadius: 20,
+        startTime: 0,
+        fadeInDuration: 0.3,
+        stayDuration: 2,
+        fadeOutDuration: 0.3,
+        slideDistance: 100,
+      });
+      // Clean up temp file
+      if (fs.existsSync(tempSegmentPath)) fs.unlinkSync(tempSegmentPath);
+    } else {
+      // No overlay, just move the file
+      fs.renameSync(tempSegmentPath, cachedPath);
+    }
 
     console.log(`Cached segment: ${cacheKey}`);
 

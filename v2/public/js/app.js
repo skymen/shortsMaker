@@ -77,11 +77,23 @@ const API = {
     return res.json();
   },
 
-  async processSegment(videoId, startTime, endTime, segmentIndex) {
+  async processSegment(
+    videoId,
+    startTime,
+    endTime,
+    segmentIndex,
+    textOverlay = ""
+  ) {
     const res = await fetch(`${this.baseUrl}/api/process`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ videoId, startTime, endTime, segmentIndex }),
+      body: JSON.stringify({
+        videoId,
+        startTime,
+        endTime,
+        segmentIndex,
+        textOverlay,
+      }),
     });
     if (!res.ok) throw new Error("Failed to process segment");
     return res.json();
@@ -809,7 +821,7 @@ function renderSegmentsList() {
       </div>
       <input type="text" 
              value="${state.textOverlays[i] || ""}" 
-             placeholder="Text overlay (optional)..."
+             placeholder="Add animated text..."
              data-index="${i}" 
              data-field="overlay">
       <div class="segment-card-actions">
@@ -893,6 +905,7 @@ async function previewSegment(index) {
   const end = state.seams[index + 1].time;
   const duration = end - start;
   const name = state.segmentNames[index] || `Segment ${index + 1}`;
+  const textOverlay = state.textOverlays[index] || "";
   const videoId = state.selectedVideo.id;
 
   // Show modal immediately with loading state
@@ -905,7 +918,13 @@ async function previewSegment(index) {
   state.previewSegmentIndex = index;
 
   try {
-    const result = await API.processSegment(videoId, start, end, index + 1);
+    const result = await API.processSegment(
+      videoId,
+      start,
+      end,
+      index + 1,
+      textOverlay
+    );
 
     if (result.success) {
       DOM.previewLoading.classList.add("hidden");

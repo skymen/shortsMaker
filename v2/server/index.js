@@ -242,6 +242,22 @@ if (!fs.existsSync(videosDir)) fs.mkdirSync(videosDir, { recursive: true });
 // Serve downloaded videos
 app.use("/videos", express.static(videosDir));
 
+// Cookies file path for yt-dlp (to bypass bot detection)
+const cookiesPath = path.join(__dirname, "../cookies.txt");
+const hasCookies = fs.existsSync(cookiesPath);
+if (hasCookies) {
+  console.log("✅ YouTube cookies found at:", cookiesPath);
+} else {
+  console.log("⚠️  No cookies.txt found. YouTube may block downloads.");
+  console.log("   To fix: Add cookies.txt to", path.join(__dirname, ".."));
+}
+
+// Build yt-dlp command with optional cookies
+function ytdlpCmd(format, url, extraArgs = "") {
+  const cookiesArg = hasCookies ? `--cookies "${cookiesPath}"` : "";
+  return `yt-dlp ${cookiesArg} -f "${format}" ${extraArgs} "${url}"`;
+}
+
 // Track download progress
 const downloadProgress = new Map();
 
@@ -282,12 +298,15 @@ app.post("/api/video/download", async (req, res) => {
 
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-    // Download with yt-dlp
-    await execPromise(
-      `yt-dlp -f "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best" ` +
-        `--merge-output-format mp4 -o "${outputPath}" "${youtubeUrl}"`,
-      { timeout: 600000 } // 10 minute timeout
+    // Download with yt-dlp (with cookies if available)
+    const format =
+      "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best";
+    const cmd = ytdlpCmd(
+      format,
+      youtubeUrl,
+      `--merge-output-format mp4 -o "${outputPath}"`
     );
+    await execPromise(cmd, { timeout: 600000 }); // 10 minute timeout
 
     downloadProgress.set(videoId, { status: "complete", progress: 100 });
 
@@ -329,12 +348,12 @@ async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
   const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
   const duration = endTime - startTime;
 
-  // First, get the direct video URL using yt-dlp
+  // First, get the direct video URL using yt-dlp (with cookies if available)
   try {
-    const { stdout: videoUrl } = await execPromise(
-      `yt-dlp -f "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best" -g "${youtubeUrl}"`,
-      { timeout: 30000 }
-    );
+    const format =
+      "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best";
+    const cmd = ytdlpCmd(format, youtubeUrl, "-g");
+    const { stdout: videoUrl } = await execPromise(cmd, { timeout: 30000 });
 
     const urls = videoUrl.trim().split("\n");
     const videoStreamUrl = urls[0];
@@ -377,9 +396,10 @@ async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
     });
   } catch (error) {
     console.error("yt-dlp error:", error);
-    throw new Error(
-      "Failed to get video URL. Make sure yt-dlp is installed: brew install yt-dlp"
-    );
+    const cookieHint = hasCookies
+      ? "YouTube may have blocked this request. Try refreshing your cookies.txt"
+      : "Add cookies.txt to bypass YouTube bot detection. See README for instructions.";
+    throw new Error(`Failed to get video URL. ${cookieHint}`);
   }
 }
 

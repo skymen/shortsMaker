@@ -7,7 +7,8 @@
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "deploy": "bash scripts/deploy.sh",
-    "setup-server": "bash scripts/setup-server.sh"
+    "setup-server": "bash scripts/setup-server.sh",
+    "upload-cookies": "bash scripts/upload-cookies.sh"
   },
   "dependencies": {
     "cors": "^2.8.5",

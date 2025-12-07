@@ -1508,6 +1508,15 @@ input, textarea, select, button {
   color: var(--success);
 }
 
+.segment-upload-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.segment-upload-actions button {
+  white-space: nowrap;
+}
+
 /* ============ Toast Notifications ============ */
 .toast-container {
   position: fixed;
@@ -1582,6 +1591,212 @@ input, textarea, select, button {
 
 .toast-close:hover {
   color: var(--text-primary);
+}
+
+/* ============ Queue Sidebar ============ */
+.queue-sidebar {
+  width: 320px;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width 0.3s ease, margin-right 0.3s ease;
+}
+
+.queue-sidebar.collapsed {
+  width: 50px;
+}
+
+.queue-sidebar.collapsed .queue-content,
+.queue-sidebar.collapsed .queue-header h3 span,
+.queue-sidebar.collapsed .queue-header h3 svg {
+  display: none;
+}
+
+.queue-sidebar.collapsed .queue-header h3 {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  padding: var(--space-md);
+}
+
+.queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-elevated);
+}
+
+.queue-header h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.queue-count {
+  background: var(--accent-primary);
+  color: white;
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.queue-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.queue-actions {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.queue-actions .btn {
+  flex: 1;
+}
+
+.queue-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-sm);
+}
+
+.queue-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--space-xl);
+}
+
+.queue-empty p {
+  margin: 0 0 var(--space-xs);
+  font-size: 0.85rem;
+}
+
+.queue-empty small {
+  font-size: 0.7rem;
+}
+
+.queue-item {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  border: 1px solid var(--border-color);
+  cursor: grab;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.queue-item:hover {
+  border-color: var(--accent-primary);
+}
+
+.queue-item.dragging {
+  opacity: 0.5;
+  transform: scale(0.98);
+}
+
+.queue-item.processing {
+  border-color: var(--warning);
+  background: rgba(255, 193, 7, 0.1);
+}
+
+.queue-item.uploading {
+  border-color: var(--accent-primary);
+  background: rgba(33, 150, 243, 0.1);
+}
+
+.queue-item.completed {
+  border-color: var(--success);
+  background: rgba(76, 175, 80, 0.1);
+}
+
+.queue-item.error {
+  border-color: var(--error);
+  background: rgba(244, 67, 54, 0.1);
+}
+
+.queue-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-xs);
+}
+
+.queue-item-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.queue-item-status {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+}
+
+.queue-item-status.processing {
+  background: var(--warning);
+  color: black;
+}
+
+.queue-item-status.uploading {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.queue-item-status.completed {
+  background: var(--success);
+  color: white;
+}
+
+.queue-item-status.error {
+  background: var(--error);
+  color: white;
+}
+
+.queue-item-meta {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin-bottom: var(--space-xs);
+}
+
+.queue-item-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.queue-item-actions button {
+  padding: 4px 8px;
+  font-size: 0.65rem;
+}
+
+/* Upload Queue Actions */
+.upload-queue-actions {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: var(--space-sm);
 }
 
 /* ============ Utility Classes ============ */

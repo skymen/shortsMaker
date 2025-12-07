@@ -10,6 +10,8 @@ const StorageManager = {
     IGNORED_VIDEOS: "shorts_maker_ignored",
     SELECTED_CHANNEL: "shorts_maker_channel",
     SETTINGS: "shorts_maker_settings",
+    UPLOAD_SETTINGS: "shorts_maker_upload_settings",
+    QUEUE: "shorts_maker_queue",
   },
 
   /**
@@ -299,6 +301,127 @@ const StorageManager = {
         defaultTags: "",
       };
     }
+  },
+
+  // ============ UPLOAD SETTINGS ============
+
+  /**
+   * Get upload settings
+   */
+  getUploadSettings() {
+    try {
+      const data = localStorage.getItem(this.KEYS.UPLOAD_SETTINGS);
+      return data
+        ? JSON.parse(data)
+        : {
+            titleTemplate: "{title} - {part}",
+            description: "",
+            tags: "",
+            privacy: "private",
+          };
+    } catch (e) {
+      console.error("Error reading upload settings:", e);
+      return {
+        titleTemplate: "{title} - {part}",
+        description: "",
+        tags: "",
+        privacy: "private",
+      };
+    }
+  },
+
+  /**
+   * Save upload settings
+   */
+  saveUploadSettings(settings) {
+    try {
+      localStorage.setItem(this.KEYS.UPLOAD_SETTINGS, JSON.stringify(settings));
+      return true;
+    } catch (e) {
+      console.error("Error saving upload settings:", e);
+      return false;
+    }
+  },
+
+  // ============ QUEUE ============
+
+  /**
+   * Get the upload queue
+   */
+  getQueue() {
+    try {
+      const data = localStorage.getItem(this.KEYS.QUEUE);
+      return data ? JSON.parse(data) : [];
+    } catch (e) {
+      console.error("Error reading queue:", e);
+      return [];
+    }
+  },
+
+  /**
+   * Save the upload queue
+   */
+  saveQueue(queue) {
+    try {
+      localStorage.setItem(this.KEYS.QUEUE, JSON.stringify(queue));
+      return true;
+    } catch (e) {
+      console.error("Error saving queue:", e);
+      return false;
+    }
+  },
+
+  /**
+   * Add item to queue
+   */
+  addToQueue(item) {
+    const queue = this.getQueue();
+    item.id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    item.addedAt = new Date().toISOString();
+    item.status = "pending"; // pending, processing, uploading, completed, error
+    queue.push(item);
+    return this.saveQueue(queue) ? item : null;
+  },
+
+  /**
+   * Update queue item
+   */
+  updateQueueItem(itemId, updates) {
+    const queue = this.getQueue();
+    const index = queue.findIndex((item) => item.id === itemId);
+    if (index !== -1) {
+      queue[index] = { ...queue[index], ...updates };
+      return this.saveQueue(queue);
+    }
+    return false;
+  },
+
+  /**
+   * Remove item from queue
+   */
+  removeFromQueue(itemId) {
+    let queue = this.getQueue();
+    queue = queue.filter((item) => item.id !== itemId);
+    return this.saveQueue(queue);
+  },
+
+  /**
+   * Reorder queue items
+   */
+  reorderQueue(fromIndex, toIndex) {
+    const queue = this.getQueue();
+    const [item] = queue.splice(fromIndex, 1);
+    queue.splice(toIndex, 0, item);
+    return this.saveQueue(queue);
+  },
+
+  /**
+   * Clear completed items from queue
+   */
+  clearCompletedFromQueue() {
+    let queue = this.getQueue();
+    queue = queue.filter((item) => item.status !== "completed");
+    return this.saveQueue(queue);
   },
 
   // ============ UTILITIES ============

@@ -29,6 +29,16 @@ const state = {
   isDraggingSeam: false,
   draggedSeamIndex: null,
   previewSegmentIndex: null,
+  // Upload settings
+  uploadSettings: {
+    titleTemplate: "{title} - {part} {text}",
+    description: "",
+    tags: "",
+    privacy: "private",
+  },
+  // Queue
+  queue: [],
+  queueProcessing: false,
 };
 
 // ============ API Functions ============
@@ -192,6 +202,15 @@ const DOM = {
   uploadTags: document.getElementById("upload-tags"),
   uploadPrivacy: document.getElementById("upload-privacy"),
   segmentsUploadList: document.getElementById("segments-upload-list"),
+  addAllToQueueBtn: document.getElementById("add-all-to-queue-btn"),
+
+  // Queue
+  queueSidebar: document.getElementById("queue-sidebar"),
+  queueCount: document.getElementById("queue-count"),
+  queueList: document.getElementById("queue-list"),
+  processQueueBtn: document.getElementById("process-queue-btn"),
+  clearQueueBtn: document.getElementById("clear-queue-btn"),
+  toggleQueueBtn: document.getElementById("toggle-queue-btn"),
 
   // Toast
   toastContainer: document.getElementById("toast-container"),
@@ -936,8 +955,16 @@ function renderUploadList() {
         <div class="segment-name">${name}</div>
         <div class="segment-duration">${formatTime(duration)}</div>
       </div>
-      <span class="upload-status pending">Ready</span>
-      <button class="btn btn-small btn-primary" onclick="uploadSegment(${i})">Upload</button>
+      <div class="segment-upload-actions">
+        <button class="btn btn-small btn-accent" onclick="addToQueue(${i})" title="Add to queue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Queue
+        </button>
+        <button class="btn btn-small btn-primary" onclick="uploadSegment(${i})" title="Upload directly">Upload</button>
+      </div>
     `;
 
     DOM.segmentsUploadList.appendChild(item);
@@ -1119,6 +1146,360 @@ function updateIgnoreButton() {
   }
 }
 
+// ============ Queue Functions ============
+function renderQueue() {
+  state.queue = StorageManager.getQueue();
+  DOM.queueCount.textContent = state.queue.length;
+
+  // Enable/disable buttons based on queue state
+  const hasPending = state.queue.some((item) => item.status === "pending");
+  DOM.processQueueBtn.disabled = !hasPending || state.queueProcessing;
+  DOM.clearQueueBtn.disabled = state.queue.length === 0;
+
+  if (state.queue.length === 0) {
+    DOM.queueList.innerHTML = `
+      <div class="queue-empty">
+        <p>Queue is empty</p>
+        <small>Add segments to start processing</small>
+      </div>
+    `;
+    return;
+  }
+
+  DOM.queueList.innerHTML = state.queue
+    .map(
+      (item, index) => `
+    <div class="queue-item ${item.status}" draggable="true" data-id="${
+        item.id
+      }" data-index="${index}">
+      <div class="queue-item-header">
+        <span class="queue-item-title">${
+          item.uploadTitle || item.segmentName
+        }</span>
+        <span class="queue-item-status ${item.status}">${item.status}</span>
+      </div>
+      <div class="queue-item-meta">
+        ${item.videoTitle} • ${item.segmentName} • ${formatTime(item.duration)}
+      </div>
+      <div class="queue-item-actions">
+        <button class="btn btn-small" onclick="editQueueItem('${item.id}')" ${
+        item.status !== "pending" ? "disabled" : ""
+      }>Edit</button>
+        <button class="btn btn-small" style="background: var(--error);" onclick="removeFromQueue('${
+          item.id
+        }')" ${
+        item.status === "processing" || item.status === "uploading"
+          ? "disabled"
+          : ""
+      }>Remove</button>
+      </div>
+    </div>
+  `
+    )
+    .join("");
+
+  // Add drag and drop handlers
+  setupQueueDragDrop();
+}
+
+function setupQueueDragDrop() {
+  const items = DOM.queueList.querySelectorAll(".queue-item");
+
+  items.forEach((item) => {
+    item.addEventListener("dragstart", (e) => {
+      if (item.querySelector("[disabled]")) return;
+      item.classList.add("dragging");
+      e.dataTransfer.setData("text/plain", item.dataset.index);
+    });
+
+    item.addEventListener("dragend", () => {
+      item.classList.remove("dragging");
+    });
+
+    item.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      const dragging = DOM.queueList.querySelector(".dragging");
+      if (dragging && dragging !== item) {
+        const rect = item.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (e.clientY < midY) {
+          item.parentNode.insertBefore(dragging, item);
+        } else {
+          item.parentNode.insertBefore(dragging, item.nextSibling);
+        }
+      }
+    });
+
+    item.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const fromIndex = parseInt(e.dataTransfer.getData("text/plain"));
+      const toIndex = parseInt(item.dataset.index);
+      if (fromIndex !== toIndex) {
+        StorageManager.reorderQueue(fromIndex, toIndex);
+        renderQueue();
+      }
+    });
+  });
+}
+
+function addToQueue(index) {
+  if (!state.selectedVideo || state.seams.length < 2) return;
+
+  const start = state.seams[index].time;
+  const end = state.seams[index + 1].time;
+  const duration = end - start;
+  const segmentName = state.segmentNames[index] || `Part ${index + 1}`;
+  const extraText = state.textOverlays[index] || "";
+
+  // Construct overlay text
+  const overlayLines = [];
+  if (state.videoTitleOverride) overlayLines.push(state.videoTitleOverride);
+  if (segmentName) overlayLines.push(segmentName);
+  if (extraText) overlayLines.push(extraText);
+  const fullOverlayText = overlayLines.join("\n");
+
+  // Process upload title template
+  const uploadTitle = processUploadTitle(
+    DOM.uploadTitle.value || "{title} - {part}",
+    index
+  );
+
+  const queueItem = {
+    videoId: state.selectedVideo.id,
+    videoTitle: state.videoTitleOverride || state.selectedVideo.title,
+    segmentIndex: index,
+    segmentName: segmentName,
+    startTime: start,
+    endTime: end,
+    duration: duration,
+    overlayText: fullOverlayText,
+    uploadTitle: uploadTitle,
+    uploadDescription: DOM.uploadDescription.value || "",
+    uploadTags: DOM.uploadTags.value || "",
+    uploadPrivacy: DOM.uploadPrivacy.value || "private",
+  };
+
+  const added = StorageManager.addToQueue(queueItem);
+  if (added) {
+    showToast(
+      "success",
+      "Added to queue",
+      `${segmentName} queued for processing`
+    );
+    renderQueue();
+  } else {
+    showToast("error", "Queue error", "Failed to add to queue");
+  }
+}
+
+function addAllToQueue() {
+  if (!state.selectedVideo || state.seams.length < 2) return;
+
+  let addedCount = 0;
+  for (let i = 0; i < state.seams.length - 1; i++) {
+    const start = state.seams[i].time;
+    const end = state.seams[i + 1].time;
+    const duration = end - start;
+    const segmentName = state.segmentNames[i] || `Part ${i + 1}`;
+    const extraText = state.textOverlays[i] || "";
+
+    const overlayLines = [];
+    if (state.videoTitleOverride) overlayLines.push(state.videoTitleOverride);
+    if (segmentName) overlayLines.push(segmentName);
+    if (extraText) overlayLines.push(extraText);
+    const fullOverlayText = overlayLines.join("\n");
+
+    const uploadTitle = processUploadTitle(
+      DOM.uploadTitle.value || "{title} - {part}",
+      i
+    );
+
+    const queueItem = {
+      videoId: state.selectedVideo.id,
+      videoTitle: state.videoTitleOverride || state.selectedVideo.title,
+      segmentIndex: i,
+      segmentName: segmentName,
+      startTime: start,
+      endTime: end,
+      duration: duration,
+      overlayText: fullOverlayText,
+      uploadTitle: uploadTitle,
+      uploadDescription: DOM.uploadDescription.value || "",
+      uploadTags: DOM.uploadTags.value || "",
+      uploadPrivacy: DOM.uploadPrivacy.value || "private",
+    };
+
+    if (StorageManager.addToQueue(queueItem)) {
+      addedCount++;
+    }
+  }
+
+  if (addedCount > 0) {
+    showToast("success", "Added to queue", `${addedCount} segment(s) queued`);
+    renderQueue();
+  }
+}
+
+function removeFromQueue(itemId) {
+  if (StorageManager.removeFromQueue(itemId)) {
+    renderQueue();
+    showToast("info", "Removed", "Item removed from queue");
+  }
+}
+
+function editQueueItem(itemId) {
+  const queue = StorageManager.getQueue();
+  const item = queue.find((q) => q.id === itemId);
+  if (!item) return;
+
+  const newTitle = prompt("Edit upload title:", item.uploadTitle);
+  if (newTitle !== null && newTitle !== item.uploadTitle) {
+    StorageManager.updateQueueItem(itemId, { uploadTitle: newTitle });
+    renderQueue();
+  }
+}
+
+function clearQueue() {
+  if (confirm("Clear all items from the queue?")) {
+    StorageManager.saveQueue([]);
+    renderQueue();
+    showToast("info", "Queue cleared", "All items removed from queue");
+  }
+}
+
+async function processQueue() {
+  const queue = StorageManager.getQueue();
+  const pendingItems = queue.filter((item) => item.status === "pending");
+
+  if (pendingItems.length === 0) {
+    showToast("info", "Nothing to process", "No pending items in queue");
+    return;
+  }
+
+  state.queueProcessing = true;
+  DOM.processQueueBtn.disabled = true;
+  showToast(
+    "info",
+    "Processing",
+    `Starting to process ${pendingItems.length} item(s)...`
+  );
+
+  // Process all items in parallel (rendering)
+  const processPromises = pendingItems.map(async (item) => {
+    try {
+      StorageManager.updateQueueItem(item.id, { status: "processing" });
+      renderQueue();
+
+      const result = await API.processSegment(
+        item.videoId,
+        item.startTime,
+        item.endTime,
+        item.segmentIndex + 1,
+        item.overlayText
+      );
+
+      if (result.success) {
+        StorageManager.updateQueueItem(item.id, {
+          status: "rendered",
+          outputPath: `output/${result.filename}`,
+          cached: result.cached,
+        });
+        return { success: true, item, result };
+      } else {
+        throw new Error("Processing failed");
+      }
+    } catch (error) {
+      StorageManager.updateQueueItem(item.id, {
+        status: "error",
+        error: error.message,
+      });
+      renderQueue();
+      return { success: false, item, error };
+    }
+  });
+
+  const processResults = await Promise.all(processPromises);
+  renderQueue();
+
+  // Upload in order (sequential)
+  const successfulItems = processResults.filter((r) => r.success);
+
+  for (const { item } of successfulItems) {
+    const currentItem = StorageManager.getQueue().find((q) => q.id === item.id);
+    if (!currentItem || currentItem.status === "error") continue;
+
+    try {
+      StorageManager.updateQueueItem(item.id, { status: "uploading" });
+      renderQueue();
+
+      const uploadResult = await API.uploadSegment(
+        currentItem.outputPath,
+        currentItem.uploadTitle,
+        currentItem.uploadDescription,
+        currentItem.uploadTags,
+        currentItem.uploadPrivacy
+      );
+
+      if (uploadResult.success) {
+        StorageManager.updateQueueItem(item.id, {
+          status: "completed",
+          youtubeUrl: uploadResult.url,
+          youtubeId: uploadResult.videoId,
+        });
+        showToast(
+          "success",
+          "Uploaded",
+          `"${currentItem.uploadTitle}" uploaded!`
+        );
+      } else {
+        throw new Error(uploadResult.error || "Upload failed");
+      }
+    } catch (error) {
+      StorageManager.updateQueueItem(item.id, {
+        status: "error",
+        error: error.message,
+      });
+      showToast(
+        "error",
+        "Upload failed",
+        `${currentItem.uploadTitle}: ${error.message}`
+      );
+    }
+    renderQueue();
+  }
+
+  // Remove completed items after a delay
+  setTimeout(() => {
+    StorageManager.clearCompletedFromQueue();
+    renderQueue();
+  }, 3000);
+
+  state.queueProcessing = false;
+  DOM.processQueueBtn.disabled = false;
+  renderQueue();
+
+  const completedCount = StorageManager.getQueue().filter(
+    (q) => q.status === "completed"
+  ).length;
+  const errorCount = StorageManager.getQueue().filter(
+    (q) => q.status === "error"
+  ).length;
+
+  if (errorCount > 0) {
+    showToast(
+      "warning",
+      "Processing complete",
+      `${completedCount} uploaded, ${errorCount} failed`
+    );
+  } else {
+    showToast(
+      "success",
+      "All done!",
+      `${completedCount} video(s) uploaded successfully`
+    );
+  }
+}
+
 // ============ Upload Functions ============
 function processUploadTitle(template, index) {
   const segmentName = state.segmentNames[index] || `Part ${index + 1}`;
@@ -1251,6 +1632,17 @@ async function init() {
     await loadChannelVideos();
   }
 
+  // Load upload settings
+  state.uploadSettings = StorageManager.getUploadSettings();
+  DOM.uploadTitle.value = state.uploadSettings.titleTemplate;
+  DOM.uploadDescription.value = state.uploadSettings.description;
+  DOM.uploadTags.value = state.uploadSettings.tags;
+  DOM.uploadPrivacy.value = state.uploadSettings.privacy;
+
+  // Load queue
+  state.queue = StorageManager.getQueue();
+  renderQueue();
+
   // Event listeners
   DOM.authBtn.addEventListener("click", handleAuth);
   DOM.uploadAuthBtn.addEventListener("click", handleAuth);
@@ -1310,6 +1702,29 @@ async function init() {
     }
   });
 
+  // Upload settings auto-save
+  const saveUploadSettings = () => {
+    state.uploadSettings = {
+      titleTemplate: DOM.uploadTitle.value,
+      description: DOM.uploadDescription.value,
+      tags: DOM.uploadTags.value,
+      privacy: DOM.uploadPrivacy.value,
+    };
+    StorageManager.saveUploadSettings(state.uploadSettings);
+  };
+  DOM.uploadTitle.addEventListener("change", saveUploadSettings);
+  DOM.uploadDescription.addEventListener("change", saveUploadSettings);
+  DOM.uploadTags.addEventListener("change", saveUploadSettings);
+  DOM.uploadPrivacy.addEventListener("change", saveUploadSettings);
+
+  // Queue event listeners
+  DOM.addAllToQueueBtn.addEventListener("click", addAllToQueue);
+  DOM.processQueueBtn.addEventListener("click", processQueue);
+  DOM.clearQueueBtn.addEventListener("click", clearQueue);
+  DOM.toggleQueueBtn.addEventListener("click", () => {
+    DOM.queueSidebar.classList.toggle("collapsed");
+  });
+
   // Preview modal events
   DOM.closePreviewBtn.addEventListener("click", closePreview);
   DOM.previewUploadBtn.addEventListener("click", uploadFromPreview);
@@ -1360,6 +1775,9 @@ window.deleteSeam = deleteSeam;
 window.uploadSegment = uploadSegment;
 window.previewSegment = previewSegment;
 window.toggleIgnoreVideo = toggleIgnoreVideo;
+window.addToQueue = addToQueue;
+window.removeFromQueue = removeFromQueue;
+window.editQueueItem = editQueueItem;
 
 // Start app
 document.addEventListener("DOMContentLoaded", init);

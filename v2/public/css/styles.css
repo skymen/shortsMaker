@@ -1087,6 +1087,27 @@ input, textarea, select, button {
   font-size: 0.7rem;
 }
 
+/* Segment too long warning */
+.segment-too-long {
+  border-color: var(--warning) !important;
+  background: rgba(255, 193, 7, 0.05);
+}
+
+.segment-warning {
+  background: rgba(255, 193, 7, 0.15);
+  color: var(--warning);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: 500;
+  margin-bottom: var(--space-xs);
+}
+
+.segment-duration.warning {
+  color: var(--warning);
+  font-weight: 600;
+}
+
 /* Video Title Input */
 .video-title-input {
   padding: var(--space-sm) var(--space-md);
@@ -1415,6 +1436,14 @@ input, textarea, select, button {
 .form-row {
   display: flex;
   gap: var(--space-sm);
+}
+
+.template-hint {
+  display: block;
+  margin-top: var(--space-xs);
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  line-height: 1.4;
 }
 
 .form-row .form-group {

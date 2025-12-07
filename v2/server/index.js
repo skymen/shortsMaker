@@ -534,9 +534,9 @@ app.post("/api/video/download", async (req, res) => {
 
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-    // Download with yt-dlp (with cookies if available)
+    // Download with yt-dlp (with cookies if available) - best quality
     const format =
-      "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best";
+      "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best";
     const cmd = ytdlpCmd(
       format,
       youtubeUrl,
@@ -593,10 +593,10 @@ async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
     if (!fs.existsSync(cachedVideoPath)) {
       console.log(`Downloading full video: ${videoId}`);
 
-      // Try multiple format options - iOS client has different formats available
+      // Try multiple format options - prefer highest quality
       const formats = [
-        "best[height<=720]", // Simple format that works with iOS client
-        "bestvideo[height<=720]+bestaudio/best",
+        "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best", // Best quality with merge
+        "best[height>=1080]", // At least 1080p
         "best", // Fallback to any format
       ];
 
@@ -679,9 +679,14 @@ async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
 function getSegmentCacheKey(videoId, startTime, endTime, textOverlay = "") {
   const start = Math.round(startTime * 100) / 100;
   const end = Math.round(endTime * 100) / 100;
-  // Simple hash for text overlay
+  // Use MD5 hash for text overlay to ensure uniqueness
   const textHash = textOverlay
-    ? "_t" + Buffer.from(textOverlay).toString("base64").slice(0, 8)
+    ? "_t" +
+      require("crypto")
+        .createHash("md5")
+        .update(textOverlay)
+        .digest("hex")
+        .slice(0, 12)
     : "";
   return `${videoId}_${start}_${end}${textHash}`;
 }
@@ -691,6 +696,34 @@ const segmentsCacheDir = path.join(outputDir, "cache");
 if (!fs.existsSync(segmentsCacheDir)) {
   fs.mkdirSync(segmentsCacheDir, { recursive: true });
 }
+
+// Clear cache for a specific video (used when title changes)
+app.post("/api/cache/clear", (req, res) => {
+  const { videoId } = req.body;
+
+  if (!videoId) {
+    return res.status(400).json({ error: "videoId required" });
+  }
+
+  try {
+    // Find and delete all cached segments for this video
+    const files = fs.readdirSync(segmentsCacheDir);
+    let deletedCount = 0;
+
+    for (const file of files) {
+      if (file.startsWith(videoId + "_")) {
+        fs.unlinkSync(path.join(segmentsCacheDir, file));
+        deletedCount++;
+      }
+    }
+
+    console.log(`Cleared ${deletedCount} cached segments for video ${videoId}`);
+    res.json({ success: true, deletedCount });
+  } catch (error) {
+    console.error("Error clearing cache:", error);
+    res.status(500).json({ error: "Failed to clear cache" });
+  }
+});
 
 // Process single segment (for preview) - with server-side caching and optional text overlay
 app.post("/api/process", async (req, res) => {

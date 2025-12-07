@@ -367,8 +367,13 @@
                       <input
                         type="text"
                         id="upload-title"
-                        placeholder="My Short - Part {n}"
+                        placeholder="{title} - {part}"
+                        value="{title} - {part}"
                       />
+                      <small class="template-hint"
+                        >{title} = Video title, {part} = Part name, {text} =
+                        Overlay text, {n} = Part number</small
+                      >
                     </div>
                     <div class="form-group">
                       <label>Privacy</label>

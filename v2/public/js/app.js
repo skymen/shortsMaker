@@ -78,6 +78,16 @@ const API = {
     return res.json();
   },
 
+  async clearCache(videoId) {
+    const res = await fetch(`${this.baseUrl}/api/cache/clear`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoId }),
+    });
+    if (!res.ok) throw new Error("Failed to clear cache");
+    return res.json();
+  },
+
   async processSegment(
     videoId,
     startTime,
@@ -810,7 +820,7 @@ function renderSegmentsList() {
     const isLong = duration > 180;
 
     const card = document.createElement("div");
-    card.className = "segment-card";
+    card.className = `segment-card${isLong ? " segment-too-long" : ""}`;
     card.innerHTML = `
       <div class="segment-card-header">
         <span class="segment-number">Segment ${i + 1}</span>
@@ -818,6 +828,11 @@ function renderSegmentsList() {
       duration
     )}</span>
       </div>
+      ${
+        isLong
+          ? `<div class="segment-warning">⚠️ Segment longer than 3 minutes - not suitable for Shorts</div>`
+          : ""
+      }
       <input type="text" 
              value="${state.segmentNames[i] || `Part ${i + 1}`}" 
              placeholder="Segment name..."
@@ -1084,6 +1099,19 @@ function updateIgnoreButton() {
 }
 
 // ============ Upload Functions ============
+function processUploadTitle(template, index) {
+  const segmentName = state.segmentNames[index] || `Part ${index + 1}`;
+  const extraText = state.textOverlays[index] || "";
+  const videoTitle =
+    state.videoTitleOverride || state.selectedVideo?.title || "";
+
+  return template
+    .replace(/\{title\}/gi, videoTitle)
+    .replace(/\{part\}/gi, segmentName)
+    .replace(/\{text\}/gi, extraText)
+    .replace(/\{n\}/gi, String(index + 1));
+}
+
 async function uploadSegment(index) {
   if (!state.authenticated) {
     showToast(
@@ -1094,7 +1122,58 @@ async function uploadSegment(index) {
     return;
   }
 
-  showToast("info", "Upload not available", "Feature coming soon.");
+  const titleTemplate = DOM.uploadTitle.value || "{title} - {part}";
+  const title = processUploadTitle(titleTemplate, index);
+  const description = DOM.uploadDescription.value || "";
+  const tags = DOM.uploadTags.value || "";
+  const privacy = DOM.uploadPrivacy.value || "private";
+
+  // Get the cached segment path
+  const start = state.seams[index].time;
+  const end = state.seams[index + 1].time;
+  const segmentName = state.segmentNames[index] || `Part ${index + 1}`;
+  const extraText = state.textOverlays[index] || "";
+
+  // Construct overlay text same as preview
+  const overlayLines = [];
+  if (state.videoTitleOverride) overlayLines.push(state.videoTitleOverride);
+  if (segmentName) overlayLines.push(segmentName);
+  if (extraText) overlayLines.push(extraText);
+  const fullOverlayText = overlayLines.join("\n");
+
+  try {
+    // First ensure the segment is processed
+    showToast("info", "Processing", "Preparing segment for upload...");
+    const processResult = await API.processSegment(
+      state.selectedVideo.id,
+      start,
+      end,
+      index + 1,
+      fullOverlayText
+    );
+
+    if (!processResult.success) {
+      throw new Error("Failed to process segment");
+    }
+
+    // Upload to YouTube
+    showToast("info", "Uploading", `Uploading "${title}"...`);
+    const uploadResult = await API.uploadSegment(
+      processResult.outputPath,
+      title,
+      description,
+      tags,
+      privacy
+    );
+
+    if (uploadResult.success) {
+      showToast("success", "Uploaded!", `"${title}" uploaded to YouTube`);
+    } else {
+      throw new Error(uploadResult.error || "Upload failed");
+    }
+  } catch (error) {
+    showToast("error", "Upload failed", error.message);
+  }
 }
 
 // ============ Filter Functions ============
@@ -1184,9 +1263,30 @@ async function init() {
   DOM.markFinishedBtn.addEventListener("click", toggleMarkFinished);
   DOM.ignoreVideoBtn.addEventListener("click", () => toggleIgnoreVideo());
 
-  // Video title override input
+  // Video title override input - track previous value to detect changes
+  let previousTitle = "";
+  DOM.videoTitleOverride.addEventListener("focus", () => {
+    previousTitle = state.videoTitleOverride;
+  });
   DOM.videoTitleOverride.addEventListener("input", (e) => {
     state.videoTitleOverride = e.target.value;
+  });
+  DOM.videoTitleOverride.addEventListener("blur", async () => {
+    // Clear cache if title changed (affects all segment overlays)
+    if (state.selectedVideo && state.videoTitleOverride !== previousTitle) {
+      try {
+        const result = await API.clearCache(state.selectedVideo.id);
+        if (result.deletedCount > 0) {
+          showToast(
+            "info",
+            "Cache cleared",
+            `${result.deletedCount} cached segments invalidated`
+          );
+        }
+      } catch (e) {
+        console.error("Failed to clear cache:", e);
+      }
+    }
   });
 
   // Preview modal events

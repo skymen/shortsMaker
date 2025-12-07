@@ -49,12 +49,28 @@ curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr
 chmod a+rx /usr/local/bin/yt-dlp
 yt-dlp --version
 
-# Configure yt-dlp to use Node.js as JavaScript runtime
+# Install PhantomJS for YouTube's JavaScript challenge solving
+echo "📥 Installing PhantomJS (JavaScript runtime for yt-dlp)..."
+if ! command -v phantomjs &> /dev/null; then
+    apt-get update -qq
+    apt-get install -y -qq phantomjs || {
+        # Manual install if apt fails
+        cd /tmp
+        curl -L -o phantomjs.tar.bz2 https://bitbucket.org/nickel715/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2
+        tar xjf phantomjs.tar.bz2
+        cp phantomjs-2.1.1-linux-x86_64/bin/phantomjs /usr/local/bin/
+        rm -rf phantomjs* 
+    }
+fi
+phantomjs --version || echo "PhantomJS not available"
+
+# Configure yt-dlp 
 echo "⚙️ Configuring yt-dlp..."
 mkdir -p ~/.config/yt-dlp
 cat > ~/.config/yt-dlp/config << 'YTDLPCONFIG'
-# Use Node.js for JavaScript execution
---extractor-args youtube:player_client=web_creator,web
+# Fallback options for YouTube
+--extractor-args youtube:player_client=ios,web
+--no-check-certificates
 YTDLPCONFIG
 
 # Create videos directory for downloaded videos

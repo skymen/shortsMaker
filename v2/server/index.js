@@ -255,9 +255,9 @@ if (hasCookies) {
 // Build yt-dlp command with optional cookies and workarounds for YouTube bot detection
 function ytdlpCmd(format, url, extraArgs = "") {
   const cookiesArg = hasCookies ? `--cookies "${cookiesPath}"` : "";
-  // Use web_creator client which is less likely to be blocked and doesn't need JS runtime
-  const extractorArgs =
-    '--extractor-args "youtube:player_client=web_creator,web"';
+  // Use ios client which bypasses JavaScript n-parameter challenge
+  // iOS client doesn't require JS runtime for decryption
+  const extractorArgs = '--extractor-args "youtube:player_client=ios,web"';
   return `yt-dlp ${cookiesArg} ${extractorArgs} -f "${format}" ${extraArgs} "${url}"`;
 }
 

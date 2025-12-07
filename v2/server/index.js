@@ -256,9 +256,88 @@ if (hasCookies) {
 function ytdlpCmd(format, url, extraArgs = "") {
   const cookiesArg = hasCookies ? `--cookies "${cookiesPath}"` : "";
   // Use ios client which bypasses JavaScript n-parameter challenge
-  // iOS client doesn't require JS runtime for decryption
   const extractorArgs = '--extractor-args "youtube:player_client=ios,web"';
   return `yt-dlp ${cookiesArg} ${extractorArgs} -f "${format}" ${extraArgs} "${url}"`;
+}
+
+// Fallback: Use cobalt.tools API for downloading (handles YouTube bot detection)
+async function downloadWithCobalt(videoId, outputPath) {
+  const https = require("https");
+  const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+  console.log("Trying cobalt.tools API...");
+
+  return new Promise((resolve, reject) => {
+    const postData = JSON.stringify({
+      url: youtubeUrl,
+      vCodec: "h264",
+      vQuality: "720",
+      aFormat: "mp3",
+      filenamePattern: "basic",
+    });
+
+    const options = {
+      hostname: "api.cobalt.tools",
+      port: 443,
+      path: "/api/json",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "Content-Length": Buffer.byteLength(postData),
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => {
+        try {
+          const result = JSON.parse(data);
+          if (result.status === "stream" || result.status === "redirect") {
+            const downloadUrl = result.url;
+            console.log("Got download URL from cobalt, downloading...");
+
+            // Download the file
+            const file = fs.createWriteStream(outputPath);
+            https
+              .get(downloadUrl, (response) => {
+                // Handle redirects
+                if (
+                  response.statusCode === 302 ||
+                  response.statusCode === 301
+                ) {
+                  https
+                    .get(response.headers.location, (res2) => {
+                      res2.pipe(file);
+                      file.on("finish", () => {
+                        file.close();
+                        resolve(outputPath);
+                      });
+                    })
+                    .on("error", reject);
+                } else {
+                  response.pipe(file);
+                  file.on("finish", () => {
+                    file.close();
+                    resolve(outputPath);
+                  });
+                }
+              })
+              .on("error", reject);
+          } else {
+            reject(new Error(result.text || "Cobalt API error"));
+          }
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+
+    req.on("error", reject);
+    req.write(postData);
+    req.end();
+  });
 }
 
 // Track download progress
@@ -368,9 +447,11 @@ async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
       ];
 
       let downloaded = false;
+
+      // Try yt-dlp first
       for (const format of formats) {
         try {
-          console.log(`Trying format: ${format}`);
+          console.log(`Trying yt-dlp with format: ${format}`);
           const downloadCmd = ytdlpCmd(
             format,
             youtubeUrl,
@@ -378,18 +459,30 @@ async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
           );
           await execPromise(downloadCmd, { timeout: 600000 }); // 10 min timeout
           downloaded = true;
-          console.log(
-            "Full video downloaded successfully with format:",
-            format
-          );
+          console.log("Downloaded successfully with yt-dlp, format:", format);
           break;
         } catch (e) {
-          console.log(`Format ${format} failed:`, e.message?.substring(0, 100));
+          console.log(
+            `yt-dlp format ${format} failed:`,
+            e.message?.substring(0, 100)
+          );
+        }
+      }
+
+      // Fallback to cobalt.tools API if yt-dlp fails
+      if (!downloaded) {
+        console.log("yt-dlp failed, trying cobalt.tools API...");
+        try {
+          await downloadWithCobalt(videoId, cachedVideoPath);
+          downloaded = true;
+          console.log("Downloaded successfully with cobalt.tools");
+        } catch (e) {
+          console.log("Cobalt failed:", e.message);
         }
       }
 
       if (!downloaded) {
-        throw new Error("All download formats failed");
+        throw new Error("All download methods failed (yt-dlp and cobalt)");
       }
     } else {
       console.log("Using cached video:", cachedVideoPath);

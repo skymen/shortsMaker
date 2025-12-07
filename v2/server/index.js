@@ -252,10 +252,13 @@ if (hasCookies) {
   console.log("   To fix: Add cookies.txt to", path.join(__dirname, ".."));
 }
 
-// Build yt-dlp command with optional cookies
+// Build yt-dlp command with optional cookies and workarounds for YouTube bot detection
 function ytdlpCmd(format, url, extraArgs = "") {
   const cookiesArg = hasCookies ? `--cookies "${cookiesPath}"` : "";
-  return `yt-dlp ${cookiesArg} -f "${format}" ${extraArgs} "${url}"`;
+  // Use web_creator client which is less likely to be blocked and doesn't need JS runtime
+  const extractorArgs =
+    '--extractor-args "youtube:player_client=web_creator,web"';
+  return `yt-dlp ${cookiesArg} ${extractorArgs} -f "${format}" ${extraArgs} "${url}"`;
 }
 
 // Track download progress
@@ -344,40 +347,41 @@ app.get("/api/video/status/:videoId", (req, res) => {
 });
 
 // Helper function to download YouTube video segment
+// Strategy: Download full video first with yt-dlp, then cut with ffmpeg
 async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
   const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
   const duration = endTime - startTime;
 
-  // First, get the direct video URL using yt-dlp (with cookies if available)
+  // Check if we already have the full video cached
+  const cachedVideoPath = path.join(videosDir, `${videoId}.mp4`);
+
   try {
-    const format =
-      "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best";
-    const cmd = ytdlpCmd(format, youtubeUrl, "-g");
-    const { stdout: videoUrl } = await execPromise(cmd, { timeout: 30000 });
+    // Step 1: Download full video if not cached
+    if (!fs.existsSync(cachedVideoPath)) {
+      console.log(`Downloading full video: ${videoId}`);
 
-    const urls = videoUrl.trim().split("\n");
-    const videoStreamUrl = urls[0];
-    const audioStreamUrl = urls[1] || urls[0];
+      const format =
+        "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best/best";
+      const downloadCmd = ytdlpCmd(
+        format,
+        youtubeUrl,
+        `--merge-output-format mp4 -o "${cachedVideoPath}"`
+      );
 
-    // Use ffmpeg to download and cut the segment
+      await execPromise(downloadCmd, { timeout: 600000 }); // 10 min timeout
+      console.log("Full video downloaded successfully");
+    } else {
+      console.log("Using cached video:", cachedVideoPath);
+    }
+
+    // Step 2: Cut the segment using ffmpeg
+    console.log(`Cutting segment: ${startTime}s to ${endTime}s (${duration}s)`);
+
     return new Promise((resolve, reject) => {
-      let command = ffmpeg();
-
-      // Add video stream with seek
-      command = command
-        .input(videoStreamUrl)
-        .inputOptions([`-ss ${startTime}`]);
-
-      // Add audio stream if separate
-      if (urls.length > 1) {
-        command = command
-          .input(audioStreamUrl)
-          .inputOptions([`-ss ${startTime}`]);
-      }
-
-      command
+      ffmpeg(cachedVideoPath)
+        .setStartTime(startTime)
+        .setDuration(duration)
         .outputOptions([
-          `-t ${duration}`,
           "-c:v libx264",
           "-c:a aac",
           "-preset fast",
@@ -386,20 +390,26 @@ async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
           "-y",
         ])
         .output(outputPath)
-        .on("start", (cmd) => console.log("FFmpeg started:", cmd))
-        .on("progress", (progress) =>
-          console.log("Processing:", progress.percent?.toFixed(1) + "%")
+        .on("start", (cmd) =>
+          console.log("FFmpeg cutting:", cmd.substring(0, 200))
         )
-        .on("end", () => resolve(outputPath))
+        .on("progress", (progress) => {
+          if (progress.percent)
+            console.log("Cutting:", progress.percent.toFixed(1) + "%");
+        })
+        .on("end", () => {
+          console.log("Segment created:", outputPath);
+          resolve(outputPath);
+        })
         .on("error", (err) => reject(err))
         .run();
     });
   } catch (error) {
-    console.error("yt-dlp error:", error);
+    console.error("Download/processing error:", error);
     const cookieHint = hasCookies
       ? "YouTube may have blocked this request. Try refreshing your cookies.txt"
-      : "Add cookies.txt to bypass YouTube bot detection. See README for instructions.";
-    throw new Error(`Failed to get video URL. ${cookieHint}`);
+      : "Add cookies.txt to bypass YouTube bot detection.";
+    throw new Error(`Failed to process video. ${cookieHint}`);
   }
 }
 

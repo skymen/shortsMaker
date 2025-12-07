@@ -43,12 +43,19 @@ ssh "$SERVER" << 'ENDSSH'
 set -e
 cd /var/www/shorts-maker
 
-# Ensure yt-dlp is installed (required for video downloads)
-if ! command -v yt-dlp &> /dev/null; then
-    echo "📥 Installing yt-dlp..."
-    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
-    chmod a+rx /usr/local/bin/yt-dlp
-fi
+# Ensure yt-dlp is installed and updated (required for video downloads)
+echo "📥 Updating yt-dlp..."
+curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+chmod a+rx /usr/local/bin/yt-dlp
+yt-dlp --version
+
+# Configure yt-dlp to use Node.js as JavaScript runtime
+echo "⚙️ Configuring yt-dlp..."
+mkdir -p ~/.config/yt-dlp
+cat > ~/.config/yt-dlp/config << 'YTDLPCONFIG'
+# Use Node.js for JavaScript execution
+--extractor-args youtube:player_client=web_creator,web
+YTDLPCONFIG
 
 # Create videos directory for downloaded videos
 mkdir -p videos

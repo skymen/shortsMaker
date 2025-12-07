@@ -323,37 +323,6 @@
               </div>
             </div>
 
-            <!-- Preview Section (Below) -->
-            <div class="preview-section hidden" id="preview-section">
-              <div class="section-header">
-                <h3>Preview Segment</h3>
-                <button
-                  id="close-preview-btn"
-                  class="btn-icon"
-                  title="Close preview"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
-              </div>
-              <div class="preview-content">
-                <div class="preview-video-wrapper">
-                  <video id="preview-video" controls></video>
-                </div>
-                <div class="preview-info">
-                  <p id="preview-segment-name">Segment 1</p>
-                  <p id="preview-segment-duration">Duration: 00:00</p>
-                </div>
-              </div>
-            </div>
-
             <!-- Upload Section -->
             <div class="upload-section">
               <div class="section-header">
@@ -430,6 +399,59 @@
 
       <!-- Toast Container -->
       <div id="toast-container" class="toast-container"></div>
+
+      <!-- Preview Modal -->
+      <div id="preview-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="preview-segment-name">Segment Preview</h3>
+            <button id="close-preview-btn" class="btn-icon" title="Close (Esc)">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="preview-video-container">
+              <video id="preview-video" controls autoplay></video>
+              <div id="preview-loading" class="preview-loading hidden">
+                <div class="spinner"></div>
+                <p>Processing segment...</p>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <div class="preview-meta">
+              <span id="preview-segment-duration">Duration: 00:00</span>
+              <span id="preview-cache-status" class="cache-badge"></span>
+            </div>
+            <div class="preview-actions">
+              <button id="preview-upload-btn" class="btn btn-primary">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  width="16"
+                  height="16"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                Upload to YouTube
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- YouTube IFrame API -->

@@ -149,11 +149,14 @@ const DOM = {
   markFinishedBtn: document.getElementById("mark-finished-btn"),
   ignoreVideoBtn: document.getElementById("ignore-video-btn"),
 
-  // Preview
-  previewSection: document.getElementById("preview-section"),
+  // Preview Modal
+  previewModal: document.getElementById("preview-modal"),
   previewVideo: document.getElementById("preview-video"),
   previewSegmentName: document.getElementById("preview-segment-name"),
   previewSegmentDuration: document.getElementById("preview-segment-duration"),
+  previewLoading: document.getElementById("preview-loading"),
+  previewCacheStatus: document.getElementById("preview-cache-status"),
+  previewUploadBtn: document.getElementById("preview-upload-btn"),
   closePreviewBtn: document.getElementById("close-preview-btn"),
 
   // Upload
@@ -890,36 +893,53 @@ async function previewSegment(index) {
   const end = state.seams[index + 1].time;
   const duration = end - start;
   const name = state.segmentNames[index] || `Segment ${index + 1}`;
+  const videoId = state.selectedVideo.id;
 
-  showToast("info", "Processing...", "Creating preview, please wait");
+  // Show modal immediately with loading state
+  DOM.previewModal.classList.remove("hidden");
+  DOM.previewSegmentName.textContent = name;
+  DOM.previewSegmentDuration.textContent = `Duration: ${formatTime(duration)}`;
+  DOM.previewVideo.src = "";
+  DOM.previewLoading.classList.remove("hidden");
+  DOM.previewCacheStatus.className = "cache-badge";
+  state.previewSegmentIndex = index;
 
   try {
-    const result = await API.processSegment(
-      state.selectedVideo.id,
-      start,
-      end,
-      index + 1
-    );
+    const result = await API.processSegment(videoId, start, end, index + 1);
 
     if (result.success) {
-      DOM.previewSection.classList.remove("hidden");
+      DOM.previewLoading.classList.add("hidden");
       DOM.previewVideo.src = `/output/${result.filename}`;
-      DOM.previewSegmentName.textContent = name;
-      DOM.previewSegmentDuration.textContent = `Duration: ${formatTime(
-        duration
-      )}`;
-      state.previewSegmentIndex = index;
-      showToast("success", "Preview ready", "Segment processed successfully");
+
+      // Show cache status from server
+      if (result.cached) {
+        DOM.previewCacheStatus.className = "cache-badge cached";
+        showToast("success", "Preview ready", "Loaded from cache ⚡");
+      } else {
+        DOM.previewCacheStatus.className = "cache-badge fresh";
+        showToast("success", "Preview ready", "Segment processed & cached");
+      }
     }
   } catch (e) {
+    DOM.previewLoading.classList.add("hidden");
     showToast("error", "Preview failed", e.message);
+    closePreview();
   }
 }
 
 function closePreview() {
-  DOM.previewSection.classList.add("hidden");
+  DOM.previewModal.classList.add("hidden");
+  DOM.previewVideo.pause();
   DOM.previewVideo.src = "";
   state.previewSegmentIndex = null;
+}
+
+// Upload from preview modal
+function uploadFromPreview() {
+  if (state.previewSegmentIndex !== null) {
+    closePreview();
+    uploadSegment(state.previewSegmentIndex);
+  }
 }
 
 // ============ Save & Mark Finished ============
@@ -1127,10 +1147,24 @@ async function init() {
   DOM.saveSeamsBtn.addEventListener("click", saveSeams);
   DOM.markFinishedBtn.addEventListener("click", toggleMarkFinished);
   DOM.ignoreVideoBtn.addEventListener("click", () => toggleIgnoreVideo());
+
+  // Preview modal events
   DOM.closePreviewBtn.addEventListener("click", closePreview);
+  DOM.previewUploadBtn.addEventListener("click", uploadFromPreview);
+
+  // Close modal on backdrop click
+  DOM.previewModal
+    .querySelector(".modal-backdrop")
+    .addEventListener("click", closePreview);
 
   // Keyboard shortcuts
   document.addEventListener("keydown", (e) => {
+    // Close modal on Escape
+    if (e.key === "Escape" && !DOM.previewModal.classList.contains("hidden")) {
+      closePreview();
+      return;
+    }
+
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
 
     switch (e.key) {

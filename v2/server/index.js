@@ -252,92 +252,15 @@ if (hasCookies) {
   console.log("   To fix: Add cookies.txt to", path.join(__dirname, ".."));
 }
 
-// Build yt-dlp command with optional cookies and workarounds for YouTube bot detection
+// Find yt-dlp binary path (Homebrew on macOS, or system path)
+const ytdlpPath = fs.existsSync("/opt/homebrew/bin/yt-dlp")
+  ? "/opt/homebrew/bin/yt-dlp"
+  : "yt-dlp";
+
+// Build yt-dlp command with optional cookies
 function ytdlpCmd(format, url, extraArgs = "") {
   const cookiesArg = hasCookies ? `--cookies "${cookiesPath}"` : "";
-  // Use ios client which bypasses JavaScript n-parameter challenge
-  const extractorArgs = '--extractor-args "youtube:player_client=ios,web"';
-  return `yt-dlp ${cookiesArg} ${extractorArgs} -f "${format}" ${extraArgs} "${url}"`;
-}
-
-// Fallback: Use cobalt.tools API for downloading (handles YouTube bot detection)
-async function downloadWithCobalt(videoId, outputPath) {
-  const https = require("https");
-  const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-  console.log("Trying cobalt.tools API...");
-
-  return new Promise((resolve, reject) => {
-    const postData = JSON.stringify({
-      url: youtubeUrl,
-      vCodec: "h264",
-      vQuality: "720",
-      aFormat: "mp3",
-      filenamePattern: "basic",
-    });
-
-    const options = {
-      hostname: "api.cobalt.tools",
-      port: 443,
-      path: "/api/json",
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "Content-Length": Buffer.byteLength(postData),
-      },
-    };
-
-    const req = https.request(options, (res) => {
-      let data = "";
-      res.on("data", (chunk) => (data += chunk));
-      res.on("end", () => {
-        try {
-          const result = JSON.parse(data);
-          if (result.status === "stream" || result.status === "redirect") {
-            const downloadUrl = result.url;
-            console.log("Got download URL from cobalt, downloading...");
-
-            // Download the file
-            const file = fs.createWriteStream(outputPath);
-            https
-              .get(downloadUrl, (response) => {
-                // Handle redirects
-                if (
-                  response.statusCode === 302 ||
-                  response.statusCode === 301
-                ) {
-                  https
-                    .get(response.headers.location, (res2) => {
-                      res2.pipe(file);
-                      file.on("finish", () => {
-                        file.close();
-                        resolve(outputPath);
-                      });
-                    })
-                    .on("error", reject);
-                } else {
-                  response.pipe(file);
-                  file.on("finish", () => {
-                    file.close();
-                    resolve(outputPath);
-                  });
-                }
-              })
-              .on("error", reject);
-          } else {
-            reject(new Error(result.text || "Cobalt API error"));
-          }
-        } catch (e) {
-          reject(e);
-        }
-      });
-    });
-
-    req.on("error", reject);
-    req.write(postData);
-    req.end();
-  });
+  return `${ytdlpPath} ${cookiesArg} -f "${format}" ${extraArgs} "${url}"`;
 }
 
 // Track download progress
@@ -469,20 +392,14 @@ async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
         }
       }
 
-      // Fallback to cobalt.tools API if yt-dlp fails
       if (!downloaded) {
-        console.log("yt-dlp failed, trying cobalt.tools API...");
-        try {
-          await downloadWithCobalt(videoId, cachedVideoPath);
-          downloaded = true;
-          console.log("Downloaded successfully with cobalt.tools");
-        } catch (e) {
-          console.log("Cobalt failed:", e.message);
-        }
-      }
-
-      if (!downloaded) {
-        throw new Error("All download methods failed (yt-dlp and cobalt)");
+        throw new Error(
+          "yt-dlp download failed. Try: 1) Update yt-dlp (brew upgrade yt-dlp), " +
+            "2) Export fresh cookies from YouTube, " +
+            "3) Test manually: yt-dlp -f best 'https://youtube.com/watch?v=" +
+            videoId +
+            "'"
+        );
       }
     } else {
       console.log("Using cached video:", cachedVideoPath);
@@ -527,7 +444,20 @@ async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
   }
 }
 
-// Process single segment (for preview)
+// Generate cache key for segments (rounded to 2 decimal places)
+function getSegmentCacheKey(videoId, startTime, endTime) {
+  const start = Math.round(startTime * 100) / 100;
+  const end = Math.round(endTime * 100) / 100;
+  return `${videoId}_${start}_${end}`;
+}
+
+// Create segments cache directory
+const segmentsCacheDir = path.join(outputDir, "cache");
+if (!fs.existsSync(segmentsCacheDir)) {
+  fs.mkdirSync(segmentsCacheDir, { recursive: true });
+}
+
+// Process single segment (for preview) - with server-side caching
 app.post("/api/process", async (req, res) => {
   const { videoId, startTime, endTime, segmentIndex } = req.body;
 
@@ -535,23 +465,38 @@ app.post("/api/process", async (req, res) => {
     return res.status(400).json({ error: "Invalid request data" });
   }
 
-  const outputFilename = `${videoId}_segment_${
-    segmentIndex || 1
-  }_${Date.now()}.mp4`;
-  const outputPath = path.join(outputDir, outputFilename);
+  // Generate cache key and check if segment already exists
+  const cacheKey = getSegmentCacheKey(videoId, startTime, endTime);
+  const cachedFilename = `${cacheKey}.mp4`;
+  const cachedPath = path.join(segmentsCacheDir, cachedFilename);
+
+  // Check cache first
+  if (fs.existsSync(cachedPath)) {
+    console.log(`Cache hit: ${cacheKey}`);
+    return res.json({
+      success: true,
+      outputPath: cachedPath,
+      filename: `cache/${cachedFilename}`,
+      duration: endTime - startTime,
+      cached: true,
+    });
+  }
 
   try {
     console.log(
       `Processing segment: ${videoId} from ${startTime}s to ${endTime}s`
     );
 
-    await downloadYouTubeSegment(videoId, startTime, endTime, outputPath);
+    await downloadYouTubeSegment(videoId, startTime, endTime, cachedPath);
+
+    console.log(`Cached segment: ${cacheKey}`);
 
     res.json({
       success: true,
-      outputPath: outputPath,
-      filename: outputFilename,
+      outputPath: cachedPath,
+      filename: `cache/${cachedFilename}`,
       duration: endTime - startTime,
+      cached: false,
     });
   } catch (error) {
     console.error("Processing error:", error);

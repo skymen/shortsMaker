@@ -725,6 +725,7 @@ input, textarea, select, button {
 .editor-area {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--space-md);
   min-width: 0;
 }
@@ -763,7 +764,7 @@ input, textarea, select, button {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  height: 100%;
+  min-height: 100%;
 }
 
 .editor-split {
@@ -779,6 +780,7 @@ input, textarea, select, button {
   flex-direction: column;
   gap: var(--space-md);
   min-width: 0;
+  overflow: visible;
 }
 
 .editor-right {
@@ -790,7 +792,7 @@ input, textarea, select, button {
 .player-container {
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: visible;
   position: relative;
 }
 
@@ -832,6 +834,8 @@ input, textarea, select, button {
   position: relative;
   padding-bottom: 56.25%;
   background: black;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  overflow: hidden;
 }
 
 .video-wrapper iframe,
@@ -1357,8 +1361,9 @@ input, textarea, select, button {
 .upload-section {
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: visible;
   flex-shrink: 0;
+  margin-bottom: var(--space-md);
 }
 
 .upload-section .section-header {

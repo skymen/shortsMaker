@@ -942,6 +942,11 @@ input, textarea, select, button {
   cursor: default;
 }
 
+.seam-marker.end {
+  background: var(--error);
+  cursor: default;
+}
+
 .seam-marker::before {
   content: attr(data-index);
   position: absolute;

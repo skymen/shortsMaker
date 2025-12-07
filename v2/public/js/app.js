@@ -568,6 +568,9 @@ async function selectVideo(videoId) {
     state.videoTitleOverride = video.title;
   }
 
+  // Ensure there's always a seam at the end
+  ensureEndSeam();
+
   DOM.editorPlaceholder.classList.add("hidden");
   DOM.videoEditor.classList.remove("hidden");
 
@@ -716,12 +719,17 @@ function updateTimeline() {
 
   // Add seam markers
   state.seams.forEach((seam, index) => {
+    const isStart = index === 0;
+    const isEnd = index === state.seams.length - 1;
     const marker = document.createElement("div");
-    marker.className = `seam-marker ${index === 0 ? "start" : ""}`;
+    marker.className = `seam-marker ${isStart ? "start" : ""} ${
+      isEnd ? "end" : ""
+    }`;
     marker.style.left = `${(seam.time / state.duration) * 100}%`;
-    marker.dataset.index = index === 0 ? "S" : index;
+    marker.dataset.index = isStart ? "S" : isEnd ? "E" : index;
 
-    if (index > 0) {
+    // Only allow dragging middle seams (not start or end)
+    if (index > 0 && index < state.seams.length - 1) {
       marker.addEventListener("mousedown", (e) => startDraggingSeam(e, index));
     }
 
@@ -774,6 +782,18 @@ function handleTimelineClick(e) {
   seekTo(time);
 }
 
+function ensureEndSeam() {
+  // Check if there's a seam at or very close to the end
+  const endSeamExists = state.seams.some(
+    (s) => Math.abs(s.time - state.duration) < 0.5
+  );
+
+  if (!endSeamExists && state.duration > 0) {
+    state.seams.push({ time: state.duration, label: "End" });
+    state.seams.sort((a, b) => a.time - b.time);
+  }
+}
+
 function addSeam() {
   const newSeam = {
     time: state.currentTime,
@@ -788,7 +808,8 @@ function addSeam() {
 }
 
 function deleteSeam(index) {
-  if (index === 0) return;
+  // Can't delete first seam (start) or last seam (end)
+  if (index === 0 || index === state.seams.length - 1) return;
 
   state.seams.splice(index, 1);
   state.segmentNames.splice(index - 1, 1);

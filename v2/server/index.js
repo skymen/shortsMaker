@@ -235,12 +235,97 @@ app.get("/api/youtube/video/:videoId", async (req, res) => {
 
 // ============ VIDEO PROCESSING ROUTES ============
 
+// Create videos directory for downloaded full videos
+const videosDir = path.join(__dirname, "../videos");
+if (!fs.existsSync(videosDir)) fs.mkdirSync(videosDir, { recursive: true });
+
+// Serve downloaded videos
+app.use("/videos", express.static(videosDir));
+
+// Track download progress
+const downloadProgress = new Map();
+
+// Helper to run shell commands
+function execPromise(cmd, options = {}) {
+  const { exec } = require("child_process");
+  return new Promise((resolve, reject) => {
+    exec(cmd, options, (error, stdout, stderr) => {
+      if (error) reject(error);
+      else resolve({ stdout, stderr });
+    });
+  });
+}
+
+// Download full YouTube video
+app.post("/api/video/download", async (req, res) => {
+  const { videoId } = req.body;
+
+  if (!videoId) {
+    return res.status(400).json({ error: "Video ID required" });
+  }
+
+  const outputFilename = `${videoId}.mp4`;
+  const outputPath = path.join(videosDir, outputFilename);
+
+  // Check if already downloaded
+  if (fs.existsSync(outputPath)) {
+    return res.json({
+      success: true,
+      videoUrl: `/videos/${outputFilename}`,
+      cached: true,
+    });
+  }
+
+  try {
+    console.log(`Downloading video: ${videoId}`);
+    downloadProgress.set(videoId, { status: "downloading", progress: 0 });
+
+    const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+    // Download with yt-dlp
+    await execPromise(
+      `yt-dlp -f "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best" ` +
+        `--merge-output-format mp4 -o "${outputPath}" "${youtubeUrl}"`,
+      { timeout: 600000 } // 10 minute timeout
+    );
+
+    downloadProgress.set(videoId, { status: "complete", progress: 100 });
+
+    res.json({
+      success: true,
+      videoUrl: `/videos/${outputFilename}`,
+      cached: false,
+    });
+  } catch (error) {
+    console.error("Download error:", error);
+    downloadProgress.set(videoId, { status: "error", error: error.message });
+    res.status(500).json({
+      error: "Failed to download video",
+      details: error.message,
+    });
+  }
+});
+
+// Check download status
+app.get("/api/video/status/:videoId", (req, res) => {
+  const { videoId } = req.params;
+  const outputFilename = `${videoId}.mp4`;
+  const outputPath = path.join(videosDir, outputFilename);
+
+  if (fs.existsSync(outputPath)) {
+    return res.json({ status: "ready", videoUrl: `/videos/${outputFilename}` });
+  }
+
+  const progress = downloadProgress.get(videoId);
+  if (progress) {
+    return res.json(progress);
+  }
+
+  res.json({ status: "not_started" });
+});
+
 // Helper function to download YouTube video segment
 async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
-  const { exec } = require("child_process");
-  const util = require("util");
-  const execPromise = util.promisify(exec);
-
   const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
   const duration = endTime - startTime;
 

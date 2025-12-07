@@ -4,6 +4,7 @@ node_modules/
 .env.production
 temp/
 output/
+videos/
 *.log
 .DS_Store
 package-lock.json

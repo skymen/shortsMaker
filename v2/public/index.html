@@ -1,284 +1,440 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shorts Maker v2</title>
-  <link rel="stylesheet" href="css/styles.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-</head>
-<body>
-  <div class="app">
-    <!-- Header -->
-    <header class="header">
-      <div class="header-brand">
-        <div class="logo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-          </svg>
-        </div>
-        <h1>Shorts Maker</h1>
-        <span class="version">v2</span>
-      </div>
-      <div class="header-actions">
-        <button id="auth-btn" class="btn btn-outline">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-            <circle cx="12" cy="7" r="4"></circle>
-          </svg>
-          <span>Sign In</span>
-        </button>
-      </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="main">
-      <!-- Sidebar -->
-      <aside class="sidebar">
-        <div class="sidebar-section sidebar-section-channel">
-          <h3>Channel</h3>
-          <div class="search-box">
-            <input type="text" id="channel-search" placeholder="Search YouTube channels...">
-            <button id="search-btn" class="btn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"></circle>
-                <path d="M21 21l-4.35-4.35"></path>
-              </svg>
-            </button>
-          </div>
-          <div id="channel-results" class="channel-results"></div>
-          <div id="selected-channel" class="selected-channel hidden"></div>
-        </div>
-
-        <div class="sidebar-section sidebar-section-videos">
-          <h3>Videos</h3>
-          <!-- Video Search -->
-          <div class="video-search-box">
-            <input type="text" id="video-search" placeholder="Search videos...">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"></circle>
-              <path d="M21 21l-4.35-4.35"></path>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shorts Maker v2</title>
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <!-- Header -->
+      <header class="header">
+        <div class="header-brand">
+          <div class="logo">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
             </svg>
           </div>
-          <!-- Filter Tabs -->
-          <div class="filter-tabs">
-            <button class="filter-tab active" data-filter="all">All</button>
-            <button class="filter-tab" data-filter="pending">Pending</button>
-            <button class="filter-tab" data-filter="finished">Finished</button>
-            <button class="filter-tab" data-filter="ignored">Ignored</button>
-          </div>
-          <div id="video-list" class="video-list">
-            <div class="empty-state">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
-                <path d="M7 2v20"></path>
-                <path d="M17 2v20"></path>
-                <path d="M2 12h20"></path>
-                <path d="M2 7h5"></path>
-                <path d="M2 17h5"></path>
-                <path d="M17 17h5"></path>
-                <path d="M17 7h5"></path>
-              </svg>
-              <p>Search for a channel to see videos</p>
-            </div>
-          </div>
-          <div id="pagination" class="pagination hidden">
-            <button id="prev-page" class="btn btn-small" disabled>Previous</button>
-            <span id="page-info"></span>
-            <button id="next-page" class="btn btn-small">Next</button>
-          </div>
+          <h1>Shorts Maker</h1>
+          <span class="version">v2</span>
         </div>
-      </aside>
-
-      <!-- Editor Area -->
-      <section class="editor-area">
-        <div id="editor-placeholder" class="editor-placeholder">
-          <div class="placeholder-content">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <polygon points="23 7 16 12 23 17 23 7"></polygon>
-              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+        <div class="header-actions">
+          <button id="auth-btn" class="btn btn-outline">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
             </svg>
-            <h2>Select a Video</h2>
-            <p>Choose a video from the sidebar to start creating shorts</p>
-          </div>
+            <span>Sign In</span>
+          </button>
         </div>
+      </header>
 
-        <div id="video-editor" class="video-editor hidden">
-          <!-- Split Layout: Video + Segments Side by Side -->
-          <div class="editor-split">
-            <!-- Left: Video Player -->
-            <div class="editor-left">
-              <div class="player-container">
-                <div class="video-wrapper">
-                  <iframe id="youtube-player" 
-                          src="" 
-                          frameborder="0" 
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                          allowfullscreen>
-                  </iframe>
-                </div>
-                <div class="player-controls">
-                  <div class="time-display">
-                    <span id="current-time">00:00</span>
-                    <span class="separator">/</span>
-                    <span id="total-duration">00:00</span>
-                  </div>
-                  <div class="control-buttons">
-                    <button id="seek-back" class="btn-icon" title="Seek -10s">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M1 4v6h6"></path>
-                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-                      </svg>
-                    </button>
-                    <button id="play-pause" class="btn-icon btn-large" title="Play/Pause">
-                      <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor">
-                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                      </svg>
-                      <svg class="pause-icon hidden" viewBox="0 0 24 24" fill="currentColor">
-                        <rect x="6" y="4" width="4" height="16"></rect>
-                        <rect x="14" y="4" width="4" height="16"></rect>
-                      </svg>
-                    </button>
-                    <button id="seek-forward" class="btn-icon" title="Seek +10s">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M23 4v6h-6"></path>
-                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                      </svg>
-                    </button>
-                  </div>
-                  <button id="add-seam-btn" class="btn btn-accent">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <line x1="12" y1="5" x2="12" y2="19"></line>
-                      <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Add Seam
-                  </button>
-                </div>
-              </div>
-
-              <!-- Timeline -->
-              <div class="timeline-container">
-                <div class="timeline" id="timeline">
-                  <div class="timeline-progress" id="timeline-progress"></div>
-                  <div class="timeline-seams" id="timeline-seams"></div>
-                  <div class="timeline-cursor" id="timeline-cursor"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Right: Segments Panel -->
-            <div class="editor-right">
-              <div class="segments-panel">
-                <div class="panel-header">
-                  <h3>Segments</h3>
-                  <div class="panel-actions">
-                    <button id="save-seams-btn" class="btn btn-small btn-primary" title="Save (Ctrl+S)">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                        <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                        <polyline points="7 3 7 8 15 8"></polyline>
-                      </svg>
-                      Save
-                    </button>
-                    <button id="mark-finished-btn" class="btn btn-small btn-success">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                      </svg>
-                      Done
-                    </button>
-                    <button id="ignore-video-btn" class="btn btn-small btn-outline" title="Ignore this video">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <div class="segments-list" id="segments-list">
-                  <div class="empty-segments">
-                    <p>Add seams to create segments</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Preview Section (Below) -->
-          <div class="preview-section hidden" id="preview-section">
-            <div class="section-header">
-              <h3>Preview Segment</h3>
-              <button id="close-preview-btn" class="btn-icon" title="Close preview">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
+      <!-- Main Content -->
+      <main class="main">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+          <div class="sidebar-section sidebar-section-channel">
+            <h3>Channel</h3>
+            <div class="search-box">
+              <input
+                type="text"
+                id="channel-search"
+                placeholder="Search YouTube channels..."
+              />
+              <button id="search-btn" class="btn-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <path d="M21 21l-4.35-4.35"></path>
                 </svg>
               </button>
             </div>
-            <div class="preview-content">
-              <div class="preview-video-wrapper">
-                <video id="preview-video" controls></video>
-              </div>
-              <div class="preview-info">
-                <p id="preview-segment-name">Segment 1</p>
-                <p id="preview-segment-duration">Duration: 00:00</p>
-              </div>
-            </div>
+            <div id="channel-results" class="channel-results"></div>
+            <div id="selected-channel" class="selected-channel hidden"></div>
           </div>
 
-          <!-- Upload Section -->
-          <div class="upload-section">
-            <div class="section-header">
-              <h3>Upload to YouTube</h3>
-            </div>
-            <div id="upload-auth-required" class="upload-auth-message">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          <div class="sidebar-section sidebar-section-videos">
+            <h3>Videos</h3>
+            <!-- Video Search -->
+            <div class="video-search-box">
+              <input
+                type="text"
+                id="video-search"
+                placeholder="Search videos..."
+              />
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="M21 21l-4.35-4.35"></path>
               </svg>
-              <p>Sign in with YouTube to upload your shorts</p>
-              <button id="upload-auth-btn" class="btn btn-primary">Sign In</button>
             </div>
-            <div id="upload-controls" class="upload-controls hidden">
-              <div class="upload-form">
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>Title Template</label>
-                    <input type="text" id="upload-title" placeholder="My Short - Part {n}">
-                  </div>
-                  <div class="form-group">
-                    <label>Privacy</label>
-                    <select id="upload-privacy">
-                      <option value="private">Private</option>
-                      <option value="unlisted">Unlisted</option>
-                      <option value="public">Public</option>
-                    </select>
-                  </div>
-                </div>
-                <div class="form-group">
-                  <label>Description</label>
-                  <textarea id="upload-description" rows="2" placeholder="Description for your shorts..."></textarea>
-                </div>
-                <div class="form-group">
-                  <label>Tags</label>
-                  <input type="text" id="upload-tags" placeholder="tag1, tag2, tag3">
-                </div>
+            <!-- Filter Tabs -->
+            <div class="filter-tabs">
+              <button class="filter-tab active" data-filter="all">All</button>
+              <button class="filter-tab" data-filter="pending">Pending</button>
+              <button class="filter-tab" data-filter="finished">
+                Finished
+              </button>
+              <button class="filter-tab" data-filter="ignored">Ignored</button>
+            </div>
+            <div id="video-list" class="video-list">
+              <div class="empty-state">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                >
+                  <rect
+                    x="2"
+                    y="2"
+                    width="20"
+                    height="20"
+                    rx="2.18"
+                    ry="2.18"
+                  ></rect>
+                  <path d="M7 2v20"></path>
+                  <path d="M17 2v20"></path>
+                  <path d="M2 12h20"></path>
+                  <path d="M2 7h5"></path>
+                  <path d="M2 17h5"></path>
+                  <path d="M17 17h5"></path>
+                  <path d="M17 7h5"></path>
+                </svg>
+                <p>Search for a channel to see videos</p>
               </div>
-              <div id="segments-upload-list" class="segments-upload-list"></div>
+            </div>
+            <div id="pagination" class="pagination hidden">
+              <button id="prev-page" class="btn btn-small" disabled>
+                Previous
+              </button>
+              <span id="page-info"></span>
+              <button id="next-page" class="btn btn-small">Next</button>
             </div>
           </div>
-        </div>
-      </section>
-    </main>
+        </aside>
 
-    <!-- Toast Container -->
-    <div id="toast-container" class="toast-container"></div>
-  </div>
+        <!-- Editor Area -->
+        <section class="editor-area">
+          <div id="editor-placeholder" class="editor-placeholder">
+            <div class="placeholder-content">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+              </svg>
+              <h2>Select a Video</h2>
+              <p>Choose a video from the sidebar to start creating shorts</p>
+            </div>
+          </div>
 
-  <!-- YouTube IFrame API -->
-  <script src="https://www.youtube.com/iframe_api"></script>
-  <script src="js/storage.js"></script>
-  <script src="js/app.js"></script>
-</body>
+          <div id="video-editor" class="video-editor hidden">
+            <!-- Split Layout: Video + Segments Side by Side -->
+            <div class="editor-split">
+              <!-- Left: Video Player -->
+              <div class="editor-left">
+                <div class="player-container">
+                  <!-- YouTube Player -->
+                  <div class="video-wrapper">
+                    <div id="youtube-player"></div>
+                  </div>
+                  <div class="player-controls">
+                    <div class="time-display">
+                      <span id="current-time">00:00</span>
+                      <span class="separator">/</span>
+                      <span id="total-duration">00:00</span>
+                    </div>
+                    <div class="control-buttons">
+                      <button id="seek-back" class="btn-icon" title="Seek -10s">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <path d="M1 4v6h6"></path>
+                          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                        </svg>
+                      </button>
+                      <button
+                        id="play-pause"
+                        class="btn-icon btn-large"
+                        title="Play/Pause"
+                      >
+                        <svg
+                          class="play-icon"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                        >
+                          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                        <svg
+                          class="pause-icon hidden"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                        >
+                          <rect x="6" y="4" width="4" height="16"></rect>
+                          <rect x="14" y="4" width="4" height="16"></rect>
+                        </svg>
+                      </button>
+                      <button
+                        id="seek-forward"
+                        class="btn-icon"
+                        title="Seek +10s"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <path d="M23 4v6h-6"></path>
+                          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                        </svg>
+                      </button>
+                    </div>
+                    <button id="add-seam-btn" class="btn btn-accent">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                      </svg>
+                      Add Seam
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Timeline -->
+                <div class="timeline-container">
+                  <div class="timeline" id="timeline">
+                    <div class="timeline-progress" id="timeline-progress"></div>
+                    <div class="timeline-seams" id="timeline-seams"></div>
+                    <div class="timeline-cursor" id="timeline-cursor"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right: Segments Panel -->
+              <div class="editor-right">
+                <div class="segments-panel">
+                  <div class="panel-header">
+                    <h3>Segments</h3>
+                    <div class="panel-actions">
+                      <button
+                        id="save-seams-btn"
+                        class="btn btn-small btn-primary"
+                        title="Save (Ctrl+S)"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          width="14"
+                          height="14"
+                        >
+                          <path
+                            d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"
+                          ></path>
+                          <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                          <polyline points="7 3 7 8 15 8"></polyline>
+                        </svg>
+                        Save
+                      </button>
+                      <button
+                        id="mark-finished-btn"
+                        class="btn btn-small btn-success"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          width="14"
+                          height="14"
+                        >
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        Done
+                      </button>
+                      <button
+                        id="ignore-video-btn"
+                        class="btn btn-small btn-outline"
+                        title="Ignore this video"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          width="14"
+                          height="14"
+                        >
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <line
+                            x1="4.93"
+                            y1="4.93"
+                            x2="19.07"
+                            y2="19.07"
+                          ></line>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="segments-list" id="segments-list">
+                    <div class="empty-segments">
+                      <p>Add seams to create segments</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Preview Section (Below) -->
+            <div class="preview-section hidden" id="preview-section">
+              <div class="section-header">
+                <h3>Preview Segment</h3>
+                <button
+                  id="close-preview-btn"
+                  class="btn-icon"
+                  title="Close preview"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+              <div class="preview-content">
+                <div class="preview-video-wrapper">
+                  <video id="preview-video" controls></video>
+                </div>
+                <div class="preview-info">
+                  <p id="preview-segment-name">Segment 1</p>
+                  <p id="preview-segment-duration">Duration: 00:00</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Upload Section -->
+            <div class="upload-section">
+              <div class="section-header">
+                <h3>Upload to YouTube</h3>
+              </div>
+              <div id="upload-auth-required" class="upload-auth-message">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect
+                    x="3"
+                    y="11"
+                    width="18"
+                    height="11"
+                    rx="2"
+                    ry="2"
+                  ></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                <p>Sign in with YouTube to upload your shorts</p>
+                <button id="upload-auth-btn" class="btn btn-primary">
+                  Sign In
+                </button>
+              </div>
+              <div id="upload-controls" class="upload-controls hidden">
+                <div class="upload-form">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label>Title Template</label>
+                      <input
+                        type="text"
+                        id="upload-title"
+                        placeholder="My Short - Part {n}"
+                      />
+                    </div>
+                    <div class="form-group">
+                      <label>Privacy</label>
+                      <select id="upload-privacy">
+                        <option value="private">Private</option>
+                        <option value="unlisted">Unlisted</option>
+                        <option value="public">Public</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label>Description</label>
+                    <textarea
+                      id="upload-description"
+                      rows="2"
+                      placeholder="Description for your shorts..."
+                    ></textarea>
+                  </div>
+                  <div class="form-group">
+                    <label>Tags</label>
+                    <input
+                      type="text"
+                      id="upload-tags"
+                      placeholder="tag1, tag2, tag3"
+                    />
+                  </div>
+                </div>
+                <div
+                  id="segments-upload-list"
+                  class="segments-upload-list"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- Toast Container -->
+      <div id="toast-container" class="toast-container"></div>
+    </div>
+
+    <!-- YouTube IFrame API -->
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/app.js"></script>
+  </body>
 </html>

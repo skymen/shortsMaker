@@ -791,6 +791,41 @@ input, textarea, select, button {
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
   overflow: hidden;
+  position: relative;
+}
+
+/* Download Status Overlay */
+.download-status {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  gap: var(--space-md);
+}
+
+.download-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--border-light);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.download-status p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
 }
 
 .video-wrapper {
@@ -799,12 +834,14 @@ input, textarea, select, button {
   background: black;
 }
 
-.video-wrapper iframe {
+.video-wrapper iframe,
+.video-wrapper video {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
+  object-fit: contain;
 }
 
 .player-controls {

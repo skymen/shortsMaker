@@ -43,6 +43,18 @@ ssh "$SERVER" << 'ENDSSH'
 set -e
 cd /var/www/shorts-maker
 
+# Ensure yt-dlp is installed (required for video downloads)
+if ! command -v yt-dlp &> /dev/null; then
+    echo "📥 Installing yt-dlp..."
+    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+    chmod a+rx /usr/local/bin/yt-dlp
+fi
+
+# Create videos directory for downloaded videos
+mkdir -p videos
+mkdir -p output
+mkdir -p temp
+
 echo "📦 Installing dependencies..."
 npm install --production --silent
 

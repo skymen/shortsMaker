@@ -1,5 +1,6 @@
 /**
  * Shorts Maker v2 - Main Application
+ * Uses YouTube IFrame API for editing, yt-dlp for export
  */
 
 // ============ State ============
@@ -18,7 +19,7 @@ const state = {
     prevToken: null,
     currentPage: 1,
   },
-  player: null,
+  player: null, // YouTube player instance
   playerReady: false,
   playerIntervalId: null,
   currentTime: 0,
@@ -54,7 +55,9 @@ const API = {
 
   async searchChannels(query) {
     const res = await fetch(
-      `${this.baseUrl}/api/youtube/search-channels?query=${encodeURIComponent(query)}`
+      `${this.baseUrl}/api/youtube/search-channels?query=${encodeURIComponent(
+        query
+      )}`
     );
     if (!res.ok) throw new Error("Failed to search channels");
     return res.json();
@@ -172,7 +175,9 @@ function formatTime(seconds) {
   if (!seconds || isNaN(seconds)) return "00:00";
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
-  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  return `${mins.toString().padStart(2, "0")}:${secs
+    .toString()
+    .padStart(2, "0")}`;
 }
 
 function parseDuration(isoDuration) {
@@ -206,9 +211,12 @@ function debounce(fn, delay) {
 // ============ Toast Notifications ============
 function showToast(type, title, message) {
   const icons = {
-    success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>',
-    error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>',
-    warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+    success:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+    error:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>',
+    warning:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
     info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>',
   };
 
@@ -297,7 +305,8 @@ async function searchChannels() {
   if (!query) return;
 
   try {
-    DOM.channelResults.innerHTML = '<div class="empty-state"><p>Searching...</p></div>';
+    DOM.channelResults.innerHTML =
+      '<div class="empty-state"><p>Searching...</p></div>';
     const channels = await API.searchChannels(query);
     renderChannelResults(channels);
   } catch (e) {
@@ -308,7 +317,8 @@ async function searchChannels() {
 
 function renderChannelResults(channels) {
   if (!channels.length) {
-    DOM.channelResults.innerHTML = '<div class="empty-state"><p>No channels found</p></div>';
+    DOM.channelResults.innerHTML =
+      '<div class="empty-state"><p>No channels found</p></div>';
     return;
   }
 
@@ -319,7 +329,9 @@ function renderChannelResults(channels) {
       <img src="${ch.snippet.thumbnails.default.url}" alt="${ch.snippet.title}">
       <div class="channel-item-info">
         <h4>${ch.snippet.title}</h4>
-        <p>${ch.snippet.description?.substring(0, 40) || "YouTube Channel"}...</p>
+        <p>${
+          ch.snippet.description?.substring(0, 40) || "YouTube Channel"
+        }...</p>
       </div>
     </div>
   `
@@ -378,7 +390,10 @@ async function loadChannelVideos(pageToken = null) {
   if (!state.selectedChannel) return;
 
   try {
-    const data = await API.getChannelVideos(state.selectedChannel.id, pageToken);
+    const data = await API.getChannelVideos(
+      state.selectedChannel.id,
+      pageToken
+    );
     state.videos = data.videos;
     state.pagination.nextToken = data.nextPageToken;
     state.pagination.prevToken = data.prevPageToken;
@@ -406,7 +421,9 @@ function renderVideoList() {
 
   // Apply status filter
   if (state.currentFilter === "finished") {
-    filteredVideos = filteredVideos.filter((v) => finishedVideos.includes(v.id));
+    filteredVideos = filteredVideos.filter((v) =>
+      finishedVideos.includes(v.id)
+    );
   } else if (state.currentFilter === "pending") {
     filteredVideos = filteredVideos.filter(
       (v) => !finishedVideos.includes(v.id) && !ignoredVideos.includes(v.id)
@@ -416,7 +433,9 @@ function renderVideoList() {
   } else {
     // "all" filter - hide ignored by default unless searching
     if (!searchQuery) {
-      filteredVideos = filteredVideos.filter((v) => !ignoredVideos.includes(v.id));
+      filteredVideos = filteredVideos.filter(
+        (v) => !ignoredVideos.includes(v.id)
+      );
     }
   }
 
@@ -465,11 +484,14 @@ function renderVideoList() {
           </div>
         </div>
         <div class="video-item-actions">
-          <button onclick="event.stopPropagation(); toggleIgnoreVideo('${video.id}')" title="${isIgnored ? 'Unignore' : 'Ignore'}">
+          <button onclick="event.stopPropagation(); toggleIgnoreVideo('${
+            video.id
+          }')" title="${isIgnored ? "Unignore" : "Ignore"}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              ${isIgnored 
-                ? '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>'
-                : '<circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>'
+              ${
+                isIgnored
+                  ? '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>'
+                  : '<circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>'
               }
             </svg>
           </button>
@@ -496,7 +518,7 @@ function updatePagination() {
 }
 
 // ============ Video Editor Functions ============
-function selectVideo(videoId) {
+async function selectVideo(videoId) {
   const video = state.videos.find((v) => v.id === videoId);
   if (!video) return;
 
@@ -518,9 +540,6 @@ function selectVideo(videoId) {
   DOM.editorPlaceholder.classList.add("hidden");
   DOM.videoEditor.classList.remove("hidden");
 
-  // Update YouTube player
-  loadYouTubeVideo(videoId);
-
   // Update UI
   DOM.totalDuration.textContent = formatTime(state.duration);
   updateTimeline();
@@ -529,28 +548,49 @@ function selectVideo(videoId) {
   updateMarkFinishedButton();
   updateIgnoreButton();
   closePreview();
+
+  // Load YouTube video
+  loadYouTubeVideo(videoId);
 }
 
 function loadYouTubeVideo(videoId) {
-  if (state.player && state.playerReady) {
+  if (state.player) {
+    // If player exists, just load new video
     state.player.loadVideoById(videoId);
   } else {
-    DOM.youtubePlayer.src = `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${window.location.origin}`;
+    // Create new player
+    state.player = new YT.Player("youtube-player", {
+      height: "100%",
+      width: "100%",
+      videoId: videoId,
+      playerVars: {
+        autoplay: 0,
+        controls: 1,
+        modestbranding: 1,
+        rel: 0,
+        fs: 1,
+        playsinline: 1,
+      },
+      events: {
+        onReady: onPlayerReady,
+        onStateChange: onPlayerStateChange,
+      },
+    });
   }
-}
-
-// ============ YouTube Player API ============
-function onYouTubeIframeAPIReady() {
-  state.player = new YT.Player("youtube-player", {
-    events: {
-      onReady: onPlayerReady,
-      onStateChange: onPlayerStateChange,
-    },
-  });
 }
 
 function onPlayerReady(event) {
   state.playerReady = true;
+
+  // Get video duration from player (more accurate than API)
+  const playerDuration = state.player.getDuration();
+  if (playerDuration > 0) {
+    state.duration = playerDuration;
+    DOM.totalDuration.textContent = formatTime(state.duration);
+    updateTimeline();
+  }
+
+  // Start time tracking interval
   if (state.playerIntervalId) {
     clearInterval(state.playerIntervalId);
   }
@@ -558,12 +598,15 @@ function onPlayerReady(event) {
 }
 
 function onPlayerStateChange(event) {
+  // YT.PlayerState: UNSTARTED (-1), ENDED (0), PLAYING (1), PAUSED (2), BUFFERING (3), CUED (5)
   state.isPlaying = event.data === YT.PlayerState.PLAYING;
   updatePlayPauseButton();
 }
 
 function updateCurrentTime() {
-  if (state.player && state.playerReady && typeof state.player.getCurrentTime === "function") {
+  if (!state.playerReady || !state.player) return;
+
+  try {
     state.currentTime = state.player.getCurrentTime() || 0;
     DOM.currentTime.textContent = formatTime(state.currentTime);
 
@@ -572,7 +615,14 @@ function updateCurrentTime() {
       DOM.timelineCursor.style.left = `${percent}%`;
       DOM.timelineProgress.style.width = `${percent}%`;
     }
+  } catch (e) {
+    // Player might not be ready
   }
+}
+
+// YouTube IFrame API callback (called automatically when API loads)
+function onYouTubeIframeAPIReady() {
+  console.log("YouTube IFrame API ready");
 }
 
 function updatePlayPauseButton() {
@@ -589,7 +639,7 @@ function updatePlayPauseButton() {
 }
 
 function togglePlayPause() {
-  if (!state.player || !state.playerReady) return;
+  if (!state.playerReady || !state.player) return;
 
   if (state.isPlaying) {
     state.player.pauseVideo();
@@ -599,19 +649,24 @@ function togglePlayPause() {
 }
 
 function seekRelative(seconds) {
-  if (!state.player || !state.playerReady) return;
-  const newTime = Math.max(0, Math.min(state.duration, state.currentTime + seconds));
+  if (!state.playerReady || !state.player) return;
+
+  const currentTime = state.player.getCurrentTime() || 0;
+  const newTime = Math.max(0, Math.min(state.duration, currentTime + seconds));
   state.player.seekTo(newTime, true);
 }
 
 function seekTo(time) {
-  if (!state.player || !state.playerReady) return;
+  if (!state.playerReady || !state.player) return;
+
   state.player.seekTo(time, true);
 }
 
 // ============ Timeline Functions ============
 function updateTimeline() {
   DOM.timelineSeams.innerHTML = "";
+
+  if (state.duration <= 0) return;
 
   // Add segment blocks
   for (let i = 0; i < state.seams.length - 1; i++) {
@@ -657,7 +712,10 @@ function handleSeamDrag(e) {
   if (!state.isDraggingSeam || state.draggedSeamIndex === null) return;
 
   const rect = DOM.timeline.getBoundingClientRect();
-  const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  const percent = Math.max(
+    0,
+    Math.min(1, (e.clientX - rect.left) / rect.width)
+  );
   const newTime = percent * state.duration;
 
   const draggedSeam = state.seams[state.draggedSeamIndex];
@@ -713,7 +771,8 @@ function deleteSeam(index) {
 // ============ Segments List Functions ============
 function renderSegmentsList() {
   if (state.seams.length < 2) {
-    DOM.segmentsList.innerHTML = '<div class="empty-segments"><p>Add seams to create segments</p></div>';
+    DOM.segmentsList.innerHTML =
+      '<div class="empty-segments"><p>Add seams to create segments</p></div>';
     renderUploadList();
     return;
   }
@@ -731,7 +790,9 @@ function renderSegmentsList() {
     card.innerHTML = `
       <div class="segment-card-header">
         <span class="segment-number">Segment ${i + 1}</span>
-        <span class="segment-duration ${isLong ? "warning" : ""}">${formatTime(duration)}</span>
+        <span class="segment-duration ${isLong ? "warning" : ""}">${formatTime(
+      duration
+    )}</span>
       </div>
       <input type="text" 
              value="${state.segmentNames[i] || `Part ${i + 1}`}" 
@@ -762,7 +823,9 @@ function renderSegmentsList() {
           </svg>
           Preview
         </button>
-        <button class="btn btn-small" onclick="deleteSeam(${i + 1})" title="Delete" style="background: var(--error);">
+        <button class="btn btn-small" onclick="deleteSeam(${
+          i + 1
+        })" title="Delete" style="background: var(--error);">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -793,7 +856,8 @@ function renderSegmentsList() {
 
 function renderUploadList() {
   if (state.seams.length < 2) {
-    DOM.segmentsUploadList.innerHTML = '<p style="color: var(--text-muted); text-align: center; font-size: 0.8rem;">No segments to upload</p>';
+    DOM.segmentsUploadList.innerHTML =
+      '<p style="color: var(--text-muted); text-align: center; font-size: 0.8rem;">No segments to upload</p>';
     return;
   }
 
@@ -837,11 +901,13 @@ async function previewSegment(index) {
       index + 1
     );
 
-    if (result.outputPath) {
+    if (result.success) {
       DOM.previewSection.classList.remove("hidden");
-      DOM.previewVideo.src = `/output/${result.outputPath.split("/").pop()}`;
+      DOM.previewVideo.src = `/output/${result.filename}`;
       DOM.previewSegmentName.textContent = name;
-      DOM.previewSegmentDuration.textContent = `Duration: ${formatTime(duration)}`;
+      DOM.previewSegmentDuration.textContent = `Duration: ${formatTime(
+        duration
+      )}`;
       state.previewSegmentIndex = index;
       showToast("success", "Preview ready", "Segment processed successfully");
     }
@@ -877,7 +943,9 @@ function saveSeams() {
 function toggleMarkFinished() {
   if (!state.selectedVideo) return;
 
-  const isNowFinished = StorageManager.toggleVideoFinished(state.selectedVideo.id);
+  const isNowFinished = StorageManager.toggleVideoFinished(
+    state.selectedVideo.id
+  );
 
   if (isNowFinished) {
     showToast("success", "Marked as finished");
@@ -962,11 +1030,15 @@ function updateIgnoreButton() {
 // ============ Upload Functions ============
 async function uploadSegment(index) {
   if (!state.authenticated) {
-    showToast("warning", "Not authenticated", "Please sign in to YouTube first");
+    showToast(
+      "warning",
+      "Not authenticated",
+      "Please sign in to YouTube first"
+    );
     return;
   }
 
-  showToast("info", "Upload not available", "Video processing requires server-side ffmpeg.");
+  showToast("info", "Upload not available", "Feature coming soon.");
 }
 
 // ============ Filter Functions ============
@@ -1038,8 +1110,12 @@ async function init() {
     tab.addEventListener("click", () => setFilter(tab.dataset.filter));
   });
 
-  DOM.prevPage.addEventListener("click", () => loadChannelVideos(state.pagination.prevToken));
-  DOM.nextPage.addEventListener("click", () => loadChannelVideos(state.pagination.nextToken));
+  DOM.prevPage.addEventListener("click", () =>
+    loadChannelVideos(state.pagination.prevToken)
+  );
+  DOM.nextPage.addEventListener("click", () =>
+    loadChannelVideos(state.pagination.nextToken)
+  );
 
   DOM.playPause.addEventListener("click", togglePlayPause);
   DOM.seekBack.addEventListener("click", () => seekRelative(-10));
@@ -1088,7 +1164,6 @@ window.deleteSeam = deleteSeam;
 window.uploadSegment = uploadSegment;
 window.previewSegment = previewSegment;
 window.toggleIgnoreVideo = toggleIgnoreVideo;
-window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;
 
 // Start app
 document.addEventListener("DOMContentLoaded", init);

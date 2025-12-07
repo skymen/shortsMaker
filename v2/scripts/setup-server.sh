@@ -47,6 +47,15 @@ if ! command -v ffmpeg &> /dev/null; then
 fi
 ffmpeg -version | head -1
 
+# Check yt-dlp (required for downloading YouTube videos)
+echo "📥 Checking yt-dlp..."
+if ! command -v yt-dlp &> /dev/null; then
+    echo "Installing yt-dlp..."
+    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+    chmod a+rx /usr/local/bin/yt-dlp
+fi
+yt-dlp --version
+
 # Check Certbot
 echo "🔐 Checking Certbot..."
 if ! command -v certbot &> /dev/null; then

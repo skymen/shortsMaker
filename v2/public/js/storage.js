@@ -54,13 +54,20 @@ const StorageManager = {
   /**
    * Save seams for a video
    */
-  saveSeams(videoId, seams, segmentNames = [], textOverlays = []) {
+  saveSeams(
+    videoId,
+    seams,
+    segmentNames = [],
+    textOverlays = [],
+    videoTitleOverride = ""
+  ) {
     const existingData = this.getVideoData(videoId) || {};
     return this.saveVideoData(videoId, {
       ...existingData,
       seams,
       segmentNames,
       textOverlays,
+      videoTitleOverride,
     });
   },
 
@@ -74,6 +81,7 @@ const StorageManager = {
           seams: data.seams || [],
           segmentNames: data.segmentNames || [],
           textOverlays: data.textOverlays || [],
+          videoTitleOverride: data.videoTitleOverride || "",
         }
       : null;
   },
@@ -224,10 +232,7 @@ const StorageManager = {
    */
   saveSelectedChannel(channel) {
     try {
-      localStorage.setItem(
-        this.KEYS.SELECTED_CHANNEL,
-        JSON.stringify(channel)
-      );
+      localStorage.setItem(this.KEYS.SELECTED_CHANNEL, JSON.stringify(channel));
       return true;
     } catch (e) {
       console.error("Error saving channel:", e);

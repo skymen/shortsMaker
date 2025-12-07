@@ -12,6 +12,7 @@ const state = {
   seams: [],
   segmentNames: [],
   textOverlays: [],
+  videoTitleOverride: "", // Custom title for overlays (defaults to YT title)
   currentFilter: "all",
   videoSearchQuery: "",
   pagination: {
@@ -157,6 +158,7 @@ const DOM = {
 
   // Segments
   segmentsList: document.getElementById("segments-list"),
+  videoTitleOverride: document.getElementById("video-title-override"),
   saveSeamsBtn: document.getElementById("save-seams-btn"),
   markFinishedBtn: document.getElementById("mark-finished-btn"),
   ignoreVideoBtn: document.getElementById("ignore-video-btn"),
@@ -540,16 +542,20 @@ async function selectVideo(videoId) {
   state.selectedVideo = video;
   state.duration = parseDuration(video.duration);
 
-  // Load saved seams
+  // Load saved seams and title override
   const savedData = StorageManager.getSeams(videoId);
   if (savedData && savedData.seams.length) {
     state.seams = savedData.seams;
     state.segmentNames = savedData.segmentNames;
     state.textOverlays = savedData.textOverlays;
+    // Use saved title override, or default to YouTube title
+    state.videoTitleOverride = savedData.videoTitleOverride || video.title;
   } else {
     state.seams = [{ time: 0, label: "Start" }];
     state.segmentNames = [];
     state.textOverlays = [];
+    // Default to YouTube video title
+    state.videoTitleOverride = video.title;
   }
 
   DOM.editorPlaceholder.classList.add("hidden");
@@ -785,6 +791,9 @@ function deleteSeam(index) {
 
 // ============ Segments List Functions ============
 function renderSegmentsList() {
+  // Update video title input
+  DOM.videoTitleOverride.value = state.videoTitleOverride || "";
+
   if (state.seams.length < 2) {
     DOM.segmentsList.innerHTML =
       '<div class="empty-segments"><p>Add seams to create segments</p></div>';
@@ -904,13 +913,20 @@ async function previewSegment(index) {
   const start = state.seams[index].time;
   const end = state.seams[index + 1].time;
   const duration = end - start;
-  const name = state.segmentNames[index] || `Segment ${index + 1}`;
-  const textOverlay = state.textOverlays[index] || "";
+  const segmentName = state.segmentNames[index] || `Segment ${index + 1}`;
+  const extraText = state.textOverlays[index] || "";
   const videoId = state.selectedVideo.id;
+
+  // Construct full overlay text (like v1): Title + Segment Name + Extra Text
+  const overlayLines = [];
+  if (state.videoTitleOverride) overlayLines.push(state.videoTitleOverride);
+  if (segmentName) overlayLines.push(segmentName);
+  if (extraText) overlayLines.push(extraText);
+  const fullOverlayText = overlayLines.join("\n");
 
   // Show modal immediately with loading state
   DOM.previewModal.classList.remove("hidden");
-  DOM.previewSegmentName.textContent = name;
+  DOM.previewSegmentName.textContent = segmentName;
   DOM.previewSegmentDuration.textContent = `Duration: ${formatTime(duration)}`;
   DOM.previewVideo.src = "";
   DOM.previewLoading.classList.remove("hidden");
@@ -923,7 +939,7 @@ async function previewSegment(index) {
       start,
       end,
       index + 1,
-      textOverlay
+      fullOverlayText
     );
 
     if (result.success) {
@@ -969,7 +985,8 @@ function saveSeams() {
     state.selectedVideo.id,
     state.seams,
     state.segmentNames,
-    state.textOverlays
+    state.textOverlays,
+    state.videoTitleOverride
   );
 
   if (success) {
@@ -1166,6 +1183,11 @@ async function init() {
   DOM.saveSeamsBtn.addEventListener("click", saveSeams);
   DOM.markFinishedBtn.addEventListener("click", toggleMarkFinished);
   DOM.ignoreVideoBtn.addEventListener("click", () => toggleIgnoreVideo());
+
+  // Video title override input
+  DOM.videoTitleOverride.addEventListener("input", (e) => {
+    state.videoTitleOverride = e.target.value;
+  });
 
   // Preview modal events
   DOM.closePreviewBtn.addEventListener("click", closePreview);

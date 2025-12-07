@@ -1087,6 +1087,38 @@ input, textarea, select, button {
   font-size: 0.7rem;
 }
 
+/* Video Title Input */
+.video-title-input {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-elevated);
+}
+
+.video-title-input label {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-bottom: var(--space-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.video-title-input input {
+  width: 100%;
+  padding: var(--space-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.video-title-input input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
 /* ============ Preview Modal ============ */
 .modal {
   position: fixed;

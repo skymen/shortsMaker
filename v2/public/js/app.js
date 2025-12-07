@@ -1159,7 +1159,7 @@ async function uploadSegment(index) {
     // Upload to YouTube
     showToast("info", "Uploading", `Uploading "${title}"...`);
     const uploadResult = await API.uploadSegment(
-      processResult.outputPath,
+      `output/${processResult.filename}`,
       title,
       description,
       tags,

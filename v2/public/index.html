@@ -367,8 +367,8 @@
                       <input
                         type="text"
                         id="upload-title"
-                        placeholder="{title} - {part}"
-                        value="{title} - {part}"
+                        placeholder="{title} - {part} {text}"
+                        value="{title} - {part} {text}"
                       />
                       <small class="template-hint"
                         >{title} = Video title, {part} = Part name, {text} =
@@ -682,7 +682,7 @@
     <!-- YouTube IFrame API -->
     <script src="https://www.youtube.com/iframe_api"></script>
 
-    <!-- FFmpeg.wasm for client-side video processing -->
+    <!-- FFmpeg.wasm for client-side video processing (single-threaded, no SharedArrayBuffer needed) -->
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
     <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
 

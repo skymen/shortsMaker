@@ -314,7 +314,7 @@ const StorageManager = {
       return data
         ? JSON.parse(data)
         : {
-            titleTemplate: "{title} - {part}",
+            titleTemplate: "{title} - {part} {text}",
             description: "",
             tags: "",
             privacy: "private",
@@ -322,7 +322,7 @@ const StorageManager = {
     } catch (e) {
       console.error("Error reading upload settings:", e);
       return {
-        titleTemplate: "{title} - {part}",
+        titleTemplate: "{title} - {part} {text}",
         description: "",
         tags: "",
         privacy: "private",

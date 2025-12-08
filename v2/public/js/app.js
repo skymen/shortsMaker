@@ -329,23 +329,24 @@ const ClientFFmpeg = {
     try {
       // Check if FFmpeg is available
       if (typeof FFmpeg === "undefined") {
-        console.warn("FFmpeg.wasm not loaded");
+        console.warn("FFmpeg.wasm not loaded - library not found");
         this.loading = false;
         return false;
       }
 
       this.ffmpeg = new FFmpeg.FFmpeg();
 
-      // Load FFmpeg core from CDN
+      // Use single-threaded core (no SharedArrayBuffer required)
+      // This works in all browsers without special headers
+      const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+
       await this.ffmpeg.load({
-        coreURL:
-          "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js",
-        wasmURL:
-          "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm",
+        coreURL: `${baseURL}/ffmpeg-core.js`,
+        wasmURL: `${baseURL}/ffmpeg-core.wasm`,
       });
 
       this.loaded = true;
-      console.log("✅ FFmpeg.wasm loaded successfully");
+      console.log("✅ FFmpeg.wasm loaded successfully (single-threaded mode)");
       return true;
     } catch (e) {
       console.error("Failed to load FFmpeg.wasm:", e);
@@ -413,10 +414,11 @@ const ClientFFmpeg = {
   },
 
   // Check if FFmpeg.wasm is supported in this browser
+  // Single-threaded mode works without SharedArrayBuffer
   isSupported() {
-    return (
-      typeof SharedArrayBuffer !== "undefined" && typeof FFmpeg !== "undefined"
-    );
+    // FFmpeg global is loaded async, so we check more loosely
+    // The actual load() will fail gracefully if not supported
+    return typeof WebAssembly !== "undefined";
   },
 };
 
@@ -1811,7 +1813,7 @@ function addToQueue(index) {
 
   // Process upload title template
   const uploadTitle = processUploadTitle(
-    DOM.uploadTitle.value || "{title} - {part}",
+    DOM.uploadTitle.value || "{title} - {part} {text}",
     index
   );
 
@@ -1861,7 +1863,7 @@ function addAllToQueue() {
     const fullOverlayText = overlayLines.join("\n");
 
     const uploadTitle = processUploadTitle(
-      DOM.uploadTitle.value || "{title} - {part}",
+      DOM.uploadTitle.value || "{title} - {part} {text}",
       i
     );
 
@@ -2137,7 +2139,7 @@ async function uploadSegment(index) {
     return;
   }
 
-  const titleTemplate = DOM.uploadTitle.value || "{title} - {part}";
+  const titleTemplate = DOM.uploadTitle.value || "{title} - {part} {text}";
   const title = processUploadTitle(titleTemplate, index);
   const description = DOM.uploadDescription.value || "";
   const tags = DOM.uploadTags.value || "";
@@ -2361,11 +2363,11 @@ async function init() {
       }
     });
 
-    // Check if FFmpeg.wasm is supported
+    // Check if FFmpeg.wasm is supported (WebAssembly required)
     if (!ClientFFmpeg.isSupported()) {
       DOM.preferLocalProcessing.disabled = true;
       DOM.preferLocalProcessing.parentElement.title =
-        "FFmpeg.wasm not supported in this browser (requires SharedArrayBuffer)";
+        "FFmpeg.wasm not supported in this browser (requires WebAssembly)";
     }
   }
 

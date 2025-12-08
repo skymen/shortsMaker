@@ -23,14 +23,6 @@ const BASE_URL =
 app.use(cors());
 app.use(express.json());
 
-// Enable SharedArrayBuffer for FFmpeg.wasm (required headers)
-// Using 'credentialless' instead of 'require-corp' to allow YouTube iframe
-app.use((req, res, next) => {
-  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
-  res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
-  next();
-});
-
 app.use(express.static(path.join(__dirname, "../public")));
 
 // Trust proxy for correct protocol detection behind nginx

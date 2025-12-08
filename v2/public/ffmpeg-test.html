@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>FFmpeg.wasm Test</title>
+    <script src="/assets/ffmpeg/ffmpeg.js"></script>
+    <script src="/assets/ffmpeg/ffmpeg-util.js"></script>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 600px;
+        margin: 50px auto;
+        padding: 20px;
+        background: #1a1a2e;
+        color: white;
+      }
+      video {
+        width: 100%;
+        max-height: 300px;
+        background: #000;
+        border-radius: 8px;
+      }
+      input[type="file"] {
+        margin: 20px 0;
+      }
+      #message {
+        padding: 10px;
+        background: #2a2a4e;
+        border-radius: 4px;
+        min-height: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>FFmpeg.wasm Test - Trim first 3 seconds</h3>
+    <video id="output-video" controls></video><br />
+    <input type="file" id="uploader" accept="video/*" />
+    <p id="message">Select a video file to test...</p>
+
+    <script>
+      const { fetchFile } = FFmpegUtil;
+      const { FFmpeg } = FFmpegWASM;
+      let ffmpeg = null;
+
+      const trim = async ({ target: { files } }) => {
+        const message = document.getElementById("message");
+
+        if (!files[0]) return;
+
+        try {
+          if (ffmpeg === null) {
+            message.innerHTML = "Loading FFmpeg.wasm...";
+            ffmpeg = new FFmpeg();
+
+            ffmpeg.on("log", ({ message: msg }) => {
+              console.log("[FFmpeg]", msg);
+            });
+
+            ffmpeg.on("progress", ({ progress }) => {
+              message.innerHTML = `Processing: ${(progress * 100).toFixed(1)}%`;
+            });
+
+            console.log("Loading FFmpeg core...");
+            await ffmpeg.load({
+              coreURL: "/assets/ffmpeg/ffmpeg-core.js",
+              wasmURL: "/assets/ffmpeg/ffmpeg-core.wasm",
+            });
+            console.log("FFmpeg loaded!");
+          }
+
+          const { name } = files[0];
+          message.innerHTML = "Reading file...";
+          await ffmpeg.writeFile(name, await fetchFile(files[0]));
+
+          message.innerHTML = "Trimming (first 3 seconds)...";
+          await ffmpeg.exec([
+            "-i",
+            name,
+            "-ss",
+            "0",
+            "-to",
+            "3",
+            "-c",
+            "copy",
+            "output.mp4",
+          ]);
+
+          message.innerHTML = "Reading output...";
+          const data = await ffmpeg.readFile("output.mp4");
+
+          const video = document.getElementById("output-video");
+          video.src = URL.createObjectURL(
+            new Blob([data.buffer], { type: "video/mp4" })
+          );
+
+          message.innerHTML = "✅ Done! Video trimmed successfully.";
+        } catch (err) {
+          console.error(err);
+          message.innerHTML = `❌ Error: ${err.message}`;
+        }
+      };
+
+      document.getElementById("uploader").addEventListener("change", trim);
+    </script>
+  </body>
+</html>

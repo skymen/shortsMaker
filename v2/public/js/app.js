@@ -2437,7 +2437,9 @@ function renderServerQueue() {
           }/mqdefault.jpg" alt="">
         </div>
         <div class="server-queue-item-info">
-          <div class="server-queue-item-title">${item.title || "Untitled"}</div>
+          <div class="server-queue-item-title">${
+            item.uploadTitle || item.segmentName || "Untitled"
+          }</div>
           <div class="server-queue-item-meta">
             ${item.segmentName || `Segment ${item.segmentIndex + 1}`} • 
             ${formatTime(item.startTime)} - ${formatTime(item.endTime)}

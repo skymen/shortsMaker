@@ -2339,21 +2339,64 @@ async function sendQueueToServer() {
     return;
   }
 
-  const queue = StorageManager.getQueue();
-  if (queue.length === 0) {
+  const localQueue = StorageManager.getQueue();
+  if (localQueue.length === 0) {
     showToast("warning", "Queue empty", "Add items to queue first");
     return;
   }
 
   try {
     DOM.sendToServerBtn.disabled = true;
-    DOM.sendToServerBtn.textContent = "Sending...";
+    DOM.sendToServerBtn.textContent = "Syncing...";
 
-    await API.saveServerQueue(queue);
-    showToast("success", "Queue saved", `${queue.length} items sent to server`);
+    // Get existing server queue to merge
+    let serverQueue = [];
+    try {
+      const serverData = await API.getServerQueue();
+      serverQueue = serverData.queue || [];
+    } catch (e) {
+      // No existing queue, that's fine
+    }
+
+    // Helper to check if two queue items are the same
+    const itemsMatch = (a, b) => {
+      return (
+        a.videoId === b.videoId &&
+        a.startTime === b.startTime &&
+        a.endTime === b.endTime &&
+        a.segmentIndex === b.segmentIndex &&
+        a.uploadTitle === b.uploadTitle &&
+        a.textOverlay === b.textOverlay
+      );
+    };
+
+    // Merge: add items from local that don't exist on server
+    let added = 0;
+    for (const localItem of localQueue) {
+      const exists = serverQueue.some((serverItem) =>
+        itemsMatch(localItem, serverItem)
+      );
+      if (!exists) {
+        serverQueue.push(localItem);
+        added++;
+      }
+    }
+
+    // Save merged queue
+    await API.saveServerQueue(serverQueue);
+
+    if (added > 0) {
+      showToast(
+        "success",
+        "Queue synced",
+        `${added} new items added to server (${serverQueue.length} total)`
+      );
+    } else {
+      showToast("info", "Already synced", "All items already on server");
+    }
     updateServerQueueBadge();
   } catch (err) {
-    showToast("error", "Failed to save", err.message);
+    showToast("error", "Failed to sync", err.message);
   } finally {
     DOM.sendToServerBtn.disabled = false;
     DOM.sendToServerBtn.innerHTML = `
@@ -2361,7 +2404,7 @@ async function sendQueueToServer() {
         <path d="M22 2L11 13"></path>
         <path d="M22 2L15 22L11 13L2 9L22 2Z"></path>
       </svg>
-      Send to Server
+      Sync to Server
     `;
   }
 }

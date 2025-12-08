@@ -289,9 +289,20 @@ const ClientDownloader = {
     return uploadResult;
   },
 
-  // Fetch video as blob with progress
+  // Fetch video as blob with progress (uses proxy for external URLs)
   async fetchVideoBlob(url, onProgress) {
-    const response = await fetch(url);
+    // Check if URL is external (needs proxy)
+    const isExternal =
+      url.startsWith("http") && !url.startsWith(window.location.origin);
+
+    // Use proxy for external URLs to bypass CORS
+    const fetchUrl = isExternal
+      ? `${API.baseUrl}/api/proxy?url=${encodeURIComponent(url)}`
+      : url;
+
+    console.log(`Fetching video: ${isExternal ? "(via proxy)" : "(direct)"}`);
+
+    const response = await fetch(fetchUrl);
     if (!response.ok) {
       throw new Error(`Failed to download: ${response.status}`);
     }
@@ -433,15 +444,15 @@ const ClientFFmpeg = {
 };
 
 // ============ Client-Side YouTube URL Extraction ============
-// Uses Invidious API (public YouTube frontend) to get video URLs
+// Uses Invidious API (via server proxy to bypass CORS)
 const ClientYouTube = {
   // List of public Invidious instances to try
   instances: [
     "https://inv.nadeko.net",
     "https://invidious.nerdvpn.de",
-    "https://invidious.jing.rocks",
-    "https://yt.artemislena.eu",
-    "https://invidious.privacyredirect.com",
+    "https://vid.puffyan.us",
+    "https://invidious.snopyta.org",
+    "https://yewtu.be",
   ],
 
   async getVideoUrl(videoId) {
@@ -449,10 +460,13 @@ const ClientYouTube = {
 
     for (const instance of this.instances) {
       try {
-        console.log(`Trying Invidious instance: ${instance}`);
+        console.log(`Trying Invidious instance (via proxy): ${instance}`);
+
+        // Use server proxy to bypass CORS
+        const apiUrl = `${instance}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`;
         const response = await fetch(
-          `${instance}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`,
-          { signal: AbortSignal.timeout(10000) }
+          `${API.baseUrl}/api/proxy?url=${encodeURIComponent(apiUrl)}`,
+          { signal: AbortSignal.timeout(15000) }
         );
 
         if (!response.ok) {
@@ -471,10 +485,11 @@ const ClientYouTube = {
             success: true,
             videoUrl: mp4Format.url,
             source: "invidious",
+            instance: instance,
           };
         }
 
-        // Fallback to adaptive formats (might need separate audio)
+        // Fallback to adaptive formats
         const adaptiveFormats = data.adaptiveFormats || [];
         const videoFormat = adaptiveFormats.find(
           (f) => f.container === "mp4" && f.type?.includes("video") && f.url
@@ -486,6 +501,7 @@ const ClientYouTube = {
             success: true,
             videoUrl: videoFormat.url,
             source: "invidious-adaptive",
+            instance: instance,
           };
         }
 

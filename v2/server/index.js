@@ -703,6 +703,78 @@ app.post("/api/video/download", async (req, res) => {
   }
 });
 
+// Proxy endpoint to bypass CORS for client-side requests
+app.get("/api/proxy", async (req, res) => {
+  const { url } = req.query;
+
+  if (!url) {
+    return res.status(400).json({ error: "URL required" });
+  }
+
+  try {
+    const https = require("https");
+    const http = require("http");
+    const parsedUrl = new URL(url);
+    const protocol = parsedUrl.protocol === "https:" ? https : http;
+
+    const proxyReq = protocol.get(url, { timeout: 30000 }, (proxyRes) => {
+      // Forward headers
+      res.set(
+        "Content-Type",
+        proxyRes.headers["content-type"] || "application/octet-stream"
+      );
+      res.set("Content-Length", proxyRes.headers["content-length"]);
+      res.set("Access-Control-Allow-Origin", "*");
+
+      proxyRes.pipe(res);
+    });
+
+    proxyReq.on("error", (err) => {
+      console.error("Proxy error:", err);
+      res.status(500).json({ error: "Proxy request failed" });
+    });
+  } catch (error) {
+    console.error("Proxy error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Proxy video download - downloads video via URL and streams to client
+app.post("/api/video/proxy-download", async (req, res) => {
+  const { videoUrl, videoId } = req.body;
+
+  if (!videoUrl) {
+    return res.status(400).json({ error: "Video URL required" });
+  }
+
+  try {
+    const https = require("https");
+    const http = require("http");
+    const parsedUrl = new URL(videoUrl);
+    const protocol = parsedUrl.protocol === "https:" ? https : http;
+
+    console.log(`Proxying video download: ${videoId || "unknown"}`);
+
+    const proxyReq = protocol.get(videoUrl, { timeout: 600000 }, (proxyRes) => {
+      res.set("Content-Type", "video/mp4");
+      if (proxyRes.headers["content-length"]) {
+        res.set("Content-Length", proxyRes.headers["content-length"]);
+      }
+      res.set("Access-Control-Allow-Origin", "*");
+
+      proxyRes.pipe(res);
+    });
+
+    proxyReq.on("error", (err) => {
+      console.error("Video proxy error:", err);
+      res.status(500).json({ error: "Video proxy failed" });
+    });
+  } catch (error) {
+    console.error("Video proxy error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get direct video URL for client-side download (fallback when server download is blocked)
 app.post("/api/video/get-url", async (req, res) => {
   const { videoId } = req.body;

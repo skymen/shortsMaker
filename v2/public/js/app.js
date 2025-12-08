@@ -242,9 +242,19 @@ const ClientDownloader = {
   async downloadAndUpload(videoId, onProgress) {
     onProgress?.({ stage: "Getting video URL...", percent: 0 });
 
-    // Step 1: Get direct video URL from server
-    const urlResult = await API.getVideoUrl(videoId);
-    if (!urlResult.success) {
+    // Step 1: Get direct video URL (try client-side first, then server)
+    let urlResult;
+
+    try {
+      // Try Invidious API first (fully client-side)
+      urlResult = await ClientYouTube.getVideoUrl(videoId);
+    } catch (e) {
+      console.log("Client URL extraction failed, trying server...", e.message);
+      // Fallback to server
+      urlResult = await API.getVideoUrl(videoId);
+    }
+
+    if (!urlResult?.success) {
       throw new Error("Could not get video URL");
     }
 
@@ -422,16 +432,101 @@ const ClientFFmpeg = {
   },
 };
 
+// ============ Client-Side YouTube URL Extraction ============
+// Uses Invidious API (public YouTube frontend) to get video URLs
+const ClientYouTube = {
+  // List of public Invidious instances to try
+  instances: [
+    "https://inv.nadeko.net",
+    "https://invidious.nerdvpn.de",
+    "https://invidious.jing.rocks",
+    "https://yt.artemislena.eu",
+    "https://invidious.privacyredirect.com",
+  ],
+
+  async getVideoUrl(videoId) {
+    let lastError = null;
+
+    for (const instance of this.instances) {
+      try {
+        console.log(`Trying Invidious instance: ${instance}`);
+        const response = await fetch(
+          `${instance}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`,
+          { signal: AbortSignal.timeout(10000) }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        // Try to get best MP4 format from formatStreams (combined audio+video)
+        const formats = data.formatStreams || [];
+        const mp4Format = formats.find((f) => f.container === "mp4" && f.url);
+
+        if (mp4Format?.url) {
+          console.log(`✅ Got video URL from ${instance}`);
+          return {
+            success: true,
+            videoUrl: mp4Format.url,
+            source: "invidious",
+          };
+        }
+
+        // Fallback to adaptive formats (might need separate audio)
+        const adaptiveFormats = data.adaptiveFormats || [];
+        const videoFormat = adaptiveFormats.find(
+          (f) => f.container === "mp4" && f.type?.includes("video") && f.url
+        );
+
+        if (videoFormat?.url) {
+          console.log(`✅ Got adaptive video URL from ${instance}`);
+          return {
+            success: true,
+            videoUrl: videoFormat.url,
+            source: "invidious-adaptive",
+          };
+        }
+
+        throw new Error("No suitable format found");
+      } catch (e) {
+        console.log(`Instance ${instance} failed:`, e.message);
+        lastError = e;
+      }
+    }
+
+    throw new Error(`All Invidious instances failed: ${lastError?.message}`);
+  },
+};
+
 // ============ Full Client-Side Processing ============
 // Downloads video and processes segment entirely in browser
 const ClientProcessor = {
   async processSegment(videoId, startTime, endTime, onProgress) {
-    // Step 1: Get video URL from server (lightweight)
+    // Step 1: Get video URL (try client-side first, then server)
     onProgress?.({ stage: "Getting video URL...", percent: 5 });
 
-    const urlResult = await API.getVideoUrl(videoId);
-    if (!urlResult.success) {
-      throw new Error("Could not get video URL from server");
+    let urlResult;
+
+    // Try client-side extraction first (Invidious API)
+    try {
+      urlResult = await ClientYouTube.getVideoUrl(videoId);
+    } catch (e) {
+      console.log(
+        "Client-side URL extraction failed, trying server...",
+        e.message
+      );
+      // Fallback to server
+      try {
+        urlResult = await API.getVideoUrl(videoId);
+      } catch (serverError) {
+        throw new Error(`Could not get video URL: ${e.message}`);
+      }
+    }
+
+    if (!urlResult?.success) {
+      throw new Error("Could not get video URL");
     }
 
     // Step 2: Download video in browser

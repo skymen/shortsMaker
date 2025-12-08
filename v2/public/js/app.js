@@ -405,11 +405,19 @@ const ClientFFmpeg = {
         console.log(`[FFmpeg] Progress: ${(progress * 100).toFixed(1)}%`);
       });
 
-      // Load FFmpeg core from local assets
+      // Load FFmpeg core from local assets with timeout
       console.log("Loading FFmpeg core from local assets...");
-      await this.ffmpeg.load({
+      const loadPromise = this.ffmpeg.load({
         coreURL: "/assets/ffmpeg/ffmpeg-core.js",
+        wasmURL: "/assets/ffmpeg/ffmpeg-core.wasm",
       });
+
+      // 30 second timeout
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("FFmpeg load timeout (30s)")), 30000)
+      );
+
+      await Promise.race([loadPromise, timeoutPromise]);
 
       this.loaded = true;
       console.log("✅ FFmpeg.wasm loaded successfully");

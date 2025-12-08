@@ -23,7 +23,17 @@ const BASE_URL =
 app.use(cors());
 app.use(express.json());
 
-app.use(express.static(path.join(__dirname, "../public")));
+// Serve static files with correct MIME types
+app.use(
+  express.static(path.join(__dirname, "../public"), {
+    setHeaders: (res, filePath) => {
+      // Set correct MIME type for WebAssembly files
+      if (filePath.endsWith(".wasm")) {
+        res.setHeader("Content-Type", "application/wasm");
+      }
+    },
+  })
+);
 
 // Trust proxy for correct protocol detection behind nginx
 if (IS_PRODUCTION) {

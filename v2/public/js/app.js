@@ -39,6 +39,9 @@ const state = {
   // Queue
   queue: [],
   queueProcessing: false,
+  // Client-processed segments
+  lastProcessedBlob: null,
+  lastProcessedFilename: null,
 };
 
 // ============ API Functions ============
@@ -179,6 +182,52 @@ const API = {
     });
   },
 
+  // Upload processed segment blob directly for YouTube upload
+  async uploadProcessedSegment(
+    blob,
+    title,
+    description,
+    tags,
+    privacy,
+    onProgress
+  ) {
+    const formData = new FormData();
+    formData.append("video", blob, "segment.mp4");
+    formData.append("title", title);
+    formData.append("description", description || "");
+    formData.append("tags", tags || "");
+    formData.append("privacyStatus", privacy || "private");
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${this.baseUrl}/api/youtube/upload`);
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(JSON.parse(xhr.responseText));
+        } else {
+          try {
+            reject(
+              new Error(JSON.parse(xhr.responseText).error || "Upload failed")
+            );
+          } catch {
+            reject(new Error("Upload failed"));
+          }
+        }
+      };
+
+      xhr.onerror = () =>
+        reject(new Error("Network error uploading to YouTube"));
+      xhr.send(formData);
+    });
+  },
+
   // Check if video is already cached on server
   async checkVideoStatus(videoId) {
     const res = await fetch(`${this.baseUrl}/api/video/status/${videoId}`);
@@ -259,6 +308,170 @@ const ClientDownloader = {
   },
 };
 
+// ============ FFmpeg.wasm Client-Side Processor ============
+const ClientFFmpeg = {
+  ffmpeg: null,
+  loaded: false,
+  loading: false,
+
+  // Initialize FFmpeg.wasm
+  async load() {
+    if (this.loaded) return true;
+    if (this.loading) {
+      // Wait for ongoing load
+      while (this.loading) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      return this.loaded;
+    }
+
+    this.loading = true;
+    try {
+      // Check if FFmpeg is available
+      if (typeof FFmpeg === "undefined") {
+        console.warn("FFmpeg.wasm not loaded");
+        this.loading = false;
+        return false;
+      }
+
+      this.ffmpeg = new FFmpeg.FFmpeg();
+
+      // Load FFmpeg core from CDN
+      await this.ffmpeg.load({
+        coreURL:
+          "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js",
+        wasmURL:
+          "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm",
+      });
+
+      this.loaded = true;
+      console.log("✅ FFmpeg.wasm loaded successfully");
+      return true;
+    } catch (e) {
+      console.error("Failed to load FFmpeg.wasm:", e);
+      this.loading = false;
+      return false;
+    } finally {
+      this.loading = false;
+    }
+  },
+
+  // Process video segment entirely on client
+  async processSegment(videoBlob, startTime, endTime, onProgress) {
+    if (!this.loaded) {
+      const loaded = await this.load();
+      if (!loaded) throw new Error("FFmpeg.wasm not available");
+    }
+
+    const duration = endTime - startTime;
+    onProgress?.({ stage: "Preparing video...", percent: 10 });
+
+    // Write input video to FFmpeg virtual filesystem
+    const inputData = new Uint8Array(await videoBlob.arrayBuffer());
+    await this.ffmpeg.writeFile("input.mp4", inputData);
+
+    onProgress?.({ stage: "Cutting segment...", percent: 30 });
+
+    // Set up progress handler
+    this.ffmpeg.on("progress", ({ progress }) => {
+      const percent = 30 + Math.round(progress * 60);
+      onProgress?.({ stage: "Processing...", percent: Math.min(percent, 90) });
+    });
+
+    // Cut the segment
+    // Using fast seek (-ss before -i) and accurate cut
+    await this.ffmpeg.exec([
+      "-ss",
+      String(startTime),
+      "-i",
+      "input.mp4",
+      "-t",
+      String(duration),
+      "-c:v",
+      "copy", // Copy video codec (fast, no re-encoding)
+      "-c:a",
+      "copy", // Copy audio codec (fast)
+      "-avoid_negative_ts",
+      "make_zero",
+      "-movflags",
+      "+faststart",
+      "output.mp4",
+    ]);
+
+    onProgress?.({ stage: "Finalizing...", percent: 95 });
+
+    // Read the output file
+    const outputData = await this.ffmpeg.readFile("output.mp4");
+
+    // Clean up virtual filesystem
+    await this.ffmpeg.deleteFile("input.mp4");
+    await this.ffmpeg.deleteFile("output.mp4");
+
+    onProgress?.({ stage: "Complete!", percent: 100 });
+
+    return new Blob([outputData.buffer], { type: "video/mp4" });
+  },
+
+  // Check if FFmpeg.wasm is supported in this browser
+  isSupported() {
+    return (
+      typeof SharedArrayBuffer !== "undefined" && typeof FFmpeg !== "undefined"
+    );
+  },
+};
+
+// ============ Full Client-Side Processing ============
+// Downloads video and processes segment entirely in browser
+const ClientProcessor = {
+  async processSegment(videoId, startTime, endTime, onProgress) {
+    // Step 1: Get video URL from server (lightweight)
+    onProgress?.({ stage: "Getting video URL...", percent: 5 });
+
+    const urlResult = await API.getVideoUrl(videoId);
+    if (!urlResult.success) {
+      throw new Error("Could not get video URL from server");
+    }
+
+    // Step 2: Download video in browser
+    onProgress?.({ stage: "Downloading video...", percent: 10 });
+
+    const videoBlob = await ClientDownloader.fetchVideoBlob(
+      urlResult.videoUrl,
+      (percent) => {
+        onProgress?.({
+          stage: "Downloading video...",
+          percent: 10 + percent * 0.4,
+        });
+      }
+    );
+
+    // Step 3: Process with FFmpeg.wasm
+    onProgress?.({ stage: "Loading FFmpeg...", percent: 50 });
+
+    const processedBlob = await ClientFFmpeg.processSegment(
+      videoBlob,
+      startTime,
+      endTime,
+      (progress) => {
+        onProgress?.({
+          stage: progress.stage,
+          percent: 50 + (progress.percent - 10) * 0.4,
+        });
+      }
+    );
+
+    // Step 4: Return the processed blob (can be uploaded or previewed)
+    onProgress?.({ stage: "Complete!", percent: 100 });
+
+    return {
+      success: true,
+      blob: processedBlob,
+      url: URL.createObjectURL(processedBlob),
+      clientProcessed: true,
+    };
+  },
+};
+
 // ============ Video Download with Fallback ============
 // Ensures video is available on server, using client-side download as fallback
 async function ensureVideoDownloaded(videoId, onProgress) {
@@ -334,7 +547,9 @@ async function ensureVideoDownloaded(videoId, onProgress) {
   }
 }
 
-// Process segment with automatic download fallback
+// Process segment with automatic fallback strategy:
+// 1. Try server-side processing (if video cached and server fast)
+// 2. Fall back to full client-side processing (FFmpeg.wasm)
 async function processSegmentWithFallback(
   videoId,
   start,
@@ -343,12 +558,75 @@ async function processSegmentWithFallback(
   overlayText,
   onProgress
 ) {
-  // First ensure the video is available on the server
+  // Check if client-side processing is preferred or required
+  const useClientProcessing =
+    localStorage.getItem("preferClientProcessing") === "true";
+  const ffmpegSupported = ClientFFmpeg.isSupported();
+
+  // Try server-side first if video is already cached
+  if (!useClientProcessing) {
+    try {
+      const status = await API.checkVideoStatus(videoId);
+      if (status.status === "ready") {
+        onProgress?.({ stage: "Processing on server...", percent: 50 });
+        const result = await API.processSegment(
+          videoId,
+          start,
+          end,
+          segmentIndex,
+          overlayText
+        );
+        if (result.success) {
+          onProgress?.({ stage: "Complete!", percent: 100 });
+          return result;
+        }
+      }
+    } catch (e) {
+      console.log("Server processing failed:", e.message);
+    }
+  }
+
+  // Client-side processing with FFmpeg.wasm
+  if (ffmpegSupported) {
+    onProgress?.({
+      stage: "Using local processing (FFmpeg.wasm)...",
+      percent: 5,
+    });
+    showToast("info", "Local Processing", "Processing video on your device...");
+
+    try {
+      const result = await ClientProcessor.processSegment(
+        videoId,
+        start,
+        end,
+        onProgress
+      );
+
+      if (result.success) {
+        // Store the blob URL for preview/upload
+        // Generate a unique filename
+        const filename = `${videoId}_${segmentIndex}_${Date.now()}.mp4`;
+
+        return {
+          success: true,
+          filename: filename,
+          blob: result.blob,
+          blobUrl: result.url,
+          cached: false,
+          clientProcessed: true,
+        };
+      }
+    } catch (e) {
+      console.error("Client processing failed:", e);
+      showToast("warning", "Local processing failed", e.message);
+    }
+  }
+
+  // Final fallback: ensure video downloaded and try server processing
+  onProgress?.({ stage: "Downloading video...", percent: 10 });
   await ensureVideoDownloaded(videoId, onProgress);
 
-  // Now process the segment (video is guaranteed to be on server)
-  onProgress?.({ stage: "Processing segment...", percent: 90 });
-
+  onProgress?.({ stage: "Processing on server...", percent: 80 });
   const result = await API.processSegment(
     videoId,
     start,
@@ -425,6 +703,7 @@ const DOM = {
   uploadDescription: document.getElementById("upload-description"),
   uploadTags: document.getElementById("upload-tags"),
   uploadPrivacy: document.getElementById("upload-privacy"),
+  preferLocalProcessing: document.getElementById("prefer-local-processing"),
   segmentsUploadList: document.getElementById("segments-upload-list"),
   addAllToQueueBtn: document.getElementById("add-all-to-queue-btn"),
 
@@ -1257,15 +1536,37 @@ async function previewSegment(index) {
 
     if (result.success) {
       DOM.previewLoading.classList.add("hidden");
-      DOM.previewVideo.src = `/output/${result.filename}`;
 
-      // Show cache status from server
-      if (result.cached) {
-        DOM.previewCacheStatus.className = "cache-badge cached";
-        showToast("success", "Preview ready", "Loaded from cache ⚡");
-      } else {
+      // Handle client-processed vs server-processed results
+      if (result.clientProcessed && result.blobUrl) {
+        // Client-side processed - use blob URL
+        DOM.previewVideo.src = result.blobUrl;
         DOM.previewCacheStatus.className = "cache-badge fresh";
-        showToast("success", "Preview ready", "Segment processed & cached");
+        DOM.previewCacheStatus.textContent = "Local";
+        showToast(
+          "success",
+          "Preview ready",
+          "Processed locally on your device ⚡"
+        );
+
+        // Store the blob for potential upload
+        state.lastProcessedBlob = result.blob;
+        state.lastProcessedFilename = result.filename;
+      } else {
+        // Server-side processed - use server path
+        DOM.previewVideo.src = `/output/${result.filename}`;
+
+        // Show cache status from server
+        if (result.cached) {
+          DOM.previewCacheStatus.className = "cache-badge cached";
+          showToast("success", "Preview ready", "Loaded from cache ⚡");
+        } else {
+          DOM.previewCacheStatus.className = "cache-badge fresh";
+          showToast("success", "Preview ready", "Segment processed & cached");
+        }
+
+        state.lastProcessedBlob = null;
+        state.lastProcessedFilename = result.filename;
       }
     }
   } catch (e) {
@@ -2031,6 +2332,42 @@ async function init() {
   DOM.uploadDescription.addEventListener("change", saveUploadSettings);
   DOM.uploadTags.addEventListener("change", saveUploadSettings);
   DOM.uploadPrivacy.addEventListener("change", saveUploadSettings);
+
+  // Local processing toggle
+  if (DOM.preferLocalProcessing) {
+    // Load saved preference
+    DOM.preferLocalProcessing.checked =
+      localStorage.getItem("preferClientProcessing") === "true";
+
+    DOM.preferLocalProcessing.addEventListener("change", (e) => {
+      localStorage.setItem(
+        "preferClientProcessing",
+        e.target.checked ? "true" : "false"
+      );
+      if (e.target.checked) {
+        showToast(
+          "info",
+          "Local processing enabled",
+          "Video processing will use your device (FFmpeg.wasm)"
+        );
+        // Pre-load FFmpeg
+        ClientFFmpeg.load().catch(console.error);
+      } else {
+        showToast(
+          "info",
+          "Server processing enabled",
+          "Video processing will use the server"
+        );
+      }
+    });
+
+    // Check if FFmpeg.wasm is supported
+    if (!ClientFFmpeg.isSupported()) {
+      DOM.preferLocalProcessing.disabled = true;
+      DOM.preferLocalProcessing.parentElement.title =
+        "FFmpeg.wasm not supported in this browser (requires SharedArrayBuffer)";
+    }
+  }
 
   // Queue event listeners
   DOM.addAllToQueueBtn.addEventListener("click", addAllToQueue);

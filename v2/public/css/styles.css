@@ -1935,3 +1935,25 @@ input, textarea, select, button {
     display: none;
   }
 }
+
+/* Cookies upload */
+.cookies-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cookies-status {
+  font-size: 0.85rem;
+  flex: 1;
+}
+
+.cookies-upload-btn {
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cookies-upload-btn:hover {
+  background: var(--accent);
+  color: white;
+}

@@ -385,8 +385,13 @@ function cleanupVideoCache() {
 
 // Cookies file path for yt-dlp (to bypass bot detection)
 const cookiesPath = path.join(__dirname, "../cookies.txt");
-const hasCookies = fs.existsSync(cookiesPath);
-if (hasCookies) {
+
+// Check cookies dynamically (can change after upload)
+function hasCookies() {
+  return fs.existsSync(cookiesPath);
+}
+
+if (hasCookies()) {
   console.log("✅ YouTube cookies found at:", cookiesPath);
 } else {
   console.log("⚠️  No cookies.txt found. YouTube may block downloads.");
@@ -400,7 +405,7 @@ const ytdlpPath = fs.existsSync("/opt/homebrew/bin/yt-dlp")
 
 // Build yt-dlp command with optional cookies
 function ytdlpCmd(format, url, extraArgs = "") {
-  const cookiesArg = hasCookies ? `--cookies "${cookiesPath}"` : "";
+  const cookiesArg = hasCookies() ? `--cookies "${cookiesPath}"` : "";
   return `${ytdlpPath} ${cookiesArg} -f "${format}" ${extraArgs} "${url}"`;
 }
 
@@ -739,6 +744,79 @@ app.get("/api/proxy", async (req, res) => {
   }
 });
 
+// ============ COOKIES MANAGEMENT ============
+
+// Check cookies status
+app.get("/api/cookies/status", (req, res) => {
+  const exists = hasCookies();
+  let info = null;
+
+  if (exists) {
+    const stats = fs.statSync(cookiesPath);
+    info = {
+      size: stats.size,
+      modified: stats.mtime,
+    };
+  }
+
+  res.json({ exists, info });
+});
+
+// Upload cookies.txt
+app.post(
+  "/api/cookies/upload",
+  express.text({ type: "*/*", limit: "1mb" }),
+  (req, res) => {
+    try {
+      const content = req.body;
+
+      if (!content || typeof content !== "string") {
+        return res.status(400).json({ error: "No content provided" });
+      }
+
+      // Basic validation - should contain Netscape cookie format
+      if (
+        !content.includes("youtube.com") &&
+        !content.includes(".youtube.com")
+      ) {
+        return res.status(400).json({
+          error: "Invalid cookies file. Must contain YouTube cookies.",
+        });
+      }
+
+      // Write cookies file
+      fs.writeFileSync(cookiesPath, content, "utf8");
+      console.log("✅ Cookies uploaded successfully");
+
+      const stats = fs.statSync(cookiesPath);
+      res.json({
+        success: true,
+        message: "Cookies uploaded successfully",
+        info: {
+          size: stats.size,
+          modified: stats.mtime,
+        },
+      });
+    } catch (error) {
+      console.error("Cookies upload error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// Delete cookies
+app.delete("/api/cookies", (req, res) => {
+  try {
+    if (hasCookies()) {
+      fs.unlinkSync(cookiesPath);
+      console.log("🗑️ Cookies deleted");
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Proxy video download - downloads video via URL and streams to client
 app.post("/api/video/proxy-download", async (req, res) => {
   const { videoUrl, videoId } = req.body;
@@ -799,7 +877,7 @@ app.post("/api/video/get-url", async (req, res) => {
 
     for (const format of formats) {
       try {
-        const cookiesArg = hasCookies ? `--cookies "${cookiesPath}"` : "";
+        const cookiesArg = hasCookies() ? `--cookies "${cookiesPath}"` : "";
         const cmd = `${ytdlpPath} ${cookiesArg} -f "${format}" --get-url "${youtubeUrl}"`;
         const { stdout } = await execPromise(cmd, { timeout: 30000 });
 
@@ -1033,7 +1111,7 @@ async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
     });
   } catch (error) {
     console.error("Download/processing error:", error);
-    const cookieHint = hasCookies
+    const cookieHint = hasCookies()
       ? "YouTube may have blocked this request. Try refreshing your cookies.txt"
       : "Add cookies.txt to bypass YouTube bot detection.";
     throw new Error(`Failed to process video. ${cookieHint}`);

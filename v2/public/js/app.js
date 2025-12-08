@@ -101,6 +101,34 @@ const API = {
     return res.json();
   },
 
+  // Cookies management
+  async getCookiesStatus() {
+    const res = await fetch(`${this.baseUrl}/api/cookies/status`);
+    if (!res.ok) throw new Error("Failed to check cookies status");
+    return res.json();
+  },
+
+  async uploadCookies(content) {
+    const res = await fetch(`${this.baseUrl}/api/cookies/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: content,
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to upload cookies");
+    }
+    return res.json();
+  },
+
+  async deleteCookies() {
+    const res = await fetch(`${this.baseUrl}/api/cookies`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error("Failed to delete cookies");
+    return res.json();
+  },
+
   async processSegment(
     videoId,
     startTime,
@@ -242,8 +270,25 @@ const ClientDownloader = {
   async downloadAndUpload(videoId, onProgress) {
     onProgress?.({ stage: "Getting video URL...", percent: 0 });
 
-    // Get direct video URL via Invidious (through server proxy)
-    const urlResult = await ClientYouTube.getVideoUrl(videoId);
+    let urlResult;
+
+    // Try server-side yt-dlp first (works with residential IP)
+    try {
+      console.log("Trying server-side yt-dlp...");
+      urlResult = await API.getVideoUrl(videoId);
+      if (urlResult?.success) {
+        console.log("✅ Got URL from yt-dlp");
+      }
+    } catch (e) {
+      console.log("yt-dlp failed:", e.message);
+    }
+
+    // Fall back to Invidious if yt-dlp failed
+    if (!urlResult?.success) {
+      console.log("Falling back to Invidious...");
+      urlResult = await ClientYouTube.getVideoUrl(videoId);
+    }
+
     if (!urlResult?.success) {
       throw new Error("Could not get video URL");
     }
@@ -650,12 +695,30 @@ const ClientYouTube = {
 // Downloads video via server proxy and processes with FFmpeg.wasm in browser
 const ClientProcessor = {
   async processSegment(videoId, startTime, endTime, onProgress) {
-    // Step 1: Get video URL via Invidious (through server proxy)
+    // Step 1: Get video URL - try yt-dlp first, then Invidious
     onProgress?.({ stage: "Getting video URL...", percent: 5 });
 
-    const urlResult = await ClientYouTube.getVideoUrl(videoId);
+    let urlResult;
+
+    // Try server-side yt-dlp first (works with residential IP)
+    try {
+      console.log("Trying server-side yt-dlp...");
+      urlResult = await API.getVideoUrl(videoId);
+      if (urlResult?.success) {
+        console.log("✅ Got URL from yt-dlp");
+      }
+    } catch (e) {
+      console.log("yt-dlp failed:", e.message);
+    }
+
+    // Fall back to Invidious if yt-dlp failed
     if (!urlResult?.success) {
-      throw new Error("Could not get video URL from Invidious");
+      console.log("Falling back to Invidious...");
+      urlResult = await ClientYouTube.getVideoUrl(videoId);
+    }
+
+    if (!urlResult?.success) {
+      throw new Error("Could not get video URL");
     }
 
     // Step 2: Download video in browser
@@ -2594,6 +2657,54 @@ async function init() {
         "FFmpeg.wasm not supported in this browser (requires WebAssembly)";
     }
   }
+
+  // Cookies management
+  const cookiesStatus = document.getElementById("cookies-status");
+  const cookiesFile = document.getElementById("cookies-file");
+
+  async function updateCookiesStatus() {
+    if (!cookiesStatus) return;
+    try {
+      const status = await API.getCookiesStatus();
+      if (status.exists) {
+        const date = new Date(status.info.modified).toLocaleDateString();
+        cookiesStatus.textContent = `✅ Uploaded (${date})`;
+        cookiesStatus.style.color = "#2ecc71";
+      } else {
+        cookiesStatus.textContent = "❌ Not uploaded";
+        cookiesStatus.style.color = "#e74c3c";
+      }
+    } catch (e) {
+      cookiesStatus.textContent = "⚠️ Error checking";
+      cookiesStatus.style.color = "#f39c12";
+    }
+  }
+
+  if (cookiesFile) {
+    cookiesFile.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const content = await file.text();
+        await API.uploadCookies(content);
+        showToast(
+          "success",
+          "Cookies uploaded",
+          "YouTube authentication cookies saved"
+        );
+        updateCookiesStatus();
+      } catch (err) {
+        showToast("error", "Upload failed", err.message);
+      }
+
+      // Reset input
+      e.target.value = "";
+    });
+  }
+
+  // Check cookies status on load
+  updateCookiesStatus();
 
   // Queue event listeners
   DOM.addAllToQueueBtn.addEventListener("click", addAllToQueue);

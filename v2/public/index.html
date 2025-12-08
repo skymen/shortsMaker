@@ -410,6 +410,34 @@
                       Faster for slow servers.</small
                     >
                   </div>
+                  <div class="form-group">
+                    <label>YouTube Cookies</label>
+                    <div class="cookies-upload-row">
+                      <span id="cookies-status" class="cookies-status"
+                        >Checking...</span
+                      >
+                      <label
+                        class="btn btn-small btn-secondary cookies-upload-btn"
+                      >
+                        <input
+                          type="file"
+                          id="cookies-file"
+                          accept=".txt"
+                          hidden
+                        />
+                        Upload cookies.txt
+                      </label>
+                    </div>
+                    <small class="form-hint">
+                      Export cookies from browser using
+                      <a
+                        href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc"
+                        target="_blank"
+                        >Get cookies.txt</a
+                      >
+                      extension. Required if YouTube blocks downloads.
+                    </small>
+                  </div>
                 </div>
                 <div class="upload-queue-actions">
                   <button id="add-all-to-queue-btn" class="btn btn-accent">

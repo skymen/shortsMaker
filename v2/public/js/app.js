@@ -42,6 +42,11 @@ const state = {
   // Client-processed segments
   lastProcessedBlob: null,
   lastProcessedFilename: null,
+  // Environment
+  isProduction: false, // Set on init - true if running on Vultr
+  // Server queue
+  serverQueue: [],
+  serverQueueLoaded: false,
 };
 
 // ============ API Functions ============
@@ -126,6 +131,59 @@ const API = {
       method: "DELETE",
     });
     if (!res.ok) throw new Error("Failed to delete cookies");
+    return res.json();
+  },
+
+  // Environment
+  async getEnvironment() {
+    const res = await fetch(`${this.baseUrl}/api/env`);
+    if (!res.ok) throw new Error("Failed to get environment");
+    return res.json();
+  },
+
+  // Server Queue
+  async getServerQueue() {
+    const res = await fetch(`${this.baseUrl}/api/queue/server`);
+    if (!res.ok) {
+      if (res.status === 401) throw new Error("Not authenticated");
+      throw new Error("Failed to get server queue");
+    }
+    return res.json();
+  },
+
+  async saveServerQueue(queue) {
+    const res = await fetch(`${this.baseUrl}/api/queue/server`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queue }),
+    });
+    if (!res.ok) throw new Error("Failed to save queue to server");
+    return res.json();
+  },
+
+  async updateServerQueueItem(itemId, updates) {
+    const res = await fetch(`${this.baseUrl}/api/queue/server/${itemId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) throw new Error("Failed to update queue item");
+    return res.json();
+  },
+
+  async deleteServerQueueItem(itemId) {
+    const res = await fetch(`${this.baseUrl}/api/queue/server/${itemId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error("Failed to delete queue item");
+    return res.json();
+  },
+
+  async clearServerQueue() {
+    const res = await fetch(`${this.baseUrl}/api/queue/server`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error("Failed to clear server queue");
     return res.json();
   },
 
@@ -1011,6 +1069,19 @@ const DOM = {
   processQueueBtn: document.getElementById("process-queue-btn"),
   clearQueueBtn: document.getElementById("clear-queue-btn"),
   toggleQueueBtn: document.getElementById("toggle-queue-btn"),
+  sendToServerBtn: document.getElementById("send-to-server-btn"),
+  viewServerQueueBtn: document.getElementById("view-server-queue-btn"),
+  serverQueueBadge: document.getElementById("server-queue-badge"),
+
+  // Server Queue Modal
+  serverQueueModal: document.getElementById("server-queue-modal"),
+  serverQueueList: document.getElementById("server-queue-list"),
+  serverQueueStatus: document.getElementById("server-queue-status"),
+  closeServerQueueBtn: document.getElementById("close-server-queue-btn"),
+  refreshServerQueueBtn: document.getElementById("refresh-server-queue-btn"),
+  importServerQueueBtn: document.getElementById("import-server-queue-btn"),
+  processServerQueueBtn: document.getElementById("process-server-queue-btn"),
+  clearServerQueueBtn: document.getElementById("clear-server-queue-btn"),
 
   // Queue Edit Modal
   queueEditModal: document.getElementById("queue-edit-modal"),
@@ -1772,6 +1843,11 @@ function renderUploadList() {
         <div class="segment-duration">${formatTime(duration)}</div>
       </div>
       <div class="segment-upload-actions">
+        <button class="btn btn-small btn-secondary local-only" onclick="previewSegment(${i})" title="Preview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+        </button>
         <button class="btn btn-small btn-accent" onclick="addToQueue(${i})" title="Add to queue">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
             <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -1779,7 +1855,7 @@ function renderUploadList() {
           </svg>
           Queue
         </button>
-        <button class="btn btn-small btn-primary" onclick="uploadSegment(${i})" title="Upload directly">Upload</button>
+        <button class="btn btn-small btn-primary local-only" onclick="uploadSegment(${i})" title="Upload directly">Upload</button>
       </div>
     `;
 
@@ -2003,6 +2079,7 @@ function renderQueue() {
   const hasPending = state.queue.some((item) => item.status === "pending");
   DOM.processQueueBtn.disabled = !hasPending || state.queueProcessing;
   DOM.clearQueueBtn.disabled = state.queue.length === 0;
+  DOM.sendToServerBtn.disabled = state.queue.length === 0;
 
   if (state.queue.length === 0) {
     DOM.queueList.innerHTML = `
@@ -2030,6 +2107,9 @@ function renderQueue() {
         ${item.videoTitle} • ${item.segmentName} • ${formatTime(item.duration)}
       </div>
       <div class="queue-item-actions">
+        <button class="btn btn-small local-only" onclick="previewQueueItem('${
+          item.id
+        }')" ${item.status !== "pending" ? "disabled" : ""}>Preview</button>
         <button class="btn btn-small" onclick="editQueueItem('${item.id}')" ${
         item.status !== "pending" ? "disabled" : ""
       }>Edit</button>
@@ -2250,6 +2330,275 @@ function clearQueue() {
   }
 }
 
+// ============ Server Queue Functions ============
+
+async function sendQueueToServer() {
+  if (!state.authenticated) {
+    showToast("warning", "Sign in required", "Please sign in to YouTube first");
+    handleAuth();
+    return;
+  }
+
+  const queue = StorageManager.getQueue();
+  if (queue.length === 0) {
+    showToast("warning", "Queue empty", "Add items to queue first");
+    return;
+  }
+
+  try {
+    DOM.sendToServerBtn.disabled = true;
+    DOM.sendToServerBtn.textContent = "Sending...";
+
+    await API.saveServerQueue(queue);
+    showToast("success", "Queue saved", `${queue.length} items sent to server`);
+    updateServerQueueBadge();
+  } catch (err) {
+    showToast("error", "Failed to save", err.message);
+  } finally {
+    DOM.sendToServerBtn.disabled = false;
+    DOM.sendToServerBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+        <path d="M22 2L11 13"></path>
+        <path d="M22 2L15 22L11 13L2 9L22 2Z"></path>
+      </svg>
+      Send to Server
+    `;
+  }
+}
+
+async function updateServerQueueBadge() {
+  try {
+    const { queue } = await API.getServerQueue();
+    state.serverQueue = queue || [];
+    state.serverQueueLoaded = true;
+
+    if (DOM.serverQueueBadge) {
+      DOM.serverQueueBadge.textContent = queue.length > 0 ? queue.length : "";
+    }
+  } catch (err) {
+    // Not authenticated or error - ignore
+    state.serverQueue = [];
+  }
+}
+
+async function openServerQueueModal() {
+  if (!state.authenticated) {
+    showToast("warning", "Sign in required", "Please sign in to YouTube first");
+    handleAuth();
+    return;
+  }
+
+  DOM.serverQueueModal.classList.remove("hidden");
+  await loadServerQueue();
+}
+
+function closeServerQueueModal() {
+  DOM.serverQueueModal.classList.add("hidden");
+}
+
+async function loadServerQueue() {
+  DOM.serverQueueStatus.textContent = "Loading...";
+  DOM.serverQueueList.innerHTML =
+    '<div class="queue-empty"><p>Loading...</p></div>';
+
+  try {
+    const { queue, updatedAt } = await API.getServerQueue();
+    state.serverQueue = queue || [];
+
+    if (updatedAt) {
+      const date = new Date(updatedAt).toLocaleString();
+      DOM.serverQueueStatus.textContent = `${queue.length} items • Last updated: ${date}`;
+    } else {
+      DOM.serverQueueStatus.textContent = `${queue.length} items`;
+    }
+
+    renderServerQueue();
+    updateServerQueueBadge();
+  } catch (err) {
+    DOM.serverQueueStatus.textContent = "Error loading queue";
+    DOM.serverQueueList.innerHTML = `<div class="queue-empty"><p>Error: ${err.message}</p></div>`;
+  }
+}
+
+function renderServerQueue() {
+  if (state.serverQueue.length === 0) {
+    DOM.serverQueueList.innerHTML =
+      '<div class="queue-empty"><p>No items in server queue</p></div>';
+    return;
+  }
+
+  DOM.serverQueueList.innerHTML = state.serverQueue
+    .map(
+      (item) => `
+      <div class="server-queue-item" data-id="${item.id}">
+        <div class="server-queue-item-thumb">
+          <img src="https://img.youtube.com/vi/${
+            item.videoId
+          }/mqdefault.jpg" alt="">
+        </div>
+        <div class="server-queue-item-info">
+          <div class="server-queue-item-title">${item.title || "Untitled"}</div>
+          <div class="server-queue-item-meta">
+            ${item.segmentName || `Segment ${item.segmentIndex + 1}`} • 
+            ${formatTime(item.startTime)} - ${formatTime(item.endTime)}
+            ${
+              item.status !== "pending"
+                ? ` • <strong>${item.status}</strong>`
+                : ""
+            }
+          </div>
+        </div>
+        <div class="server-queue-item-actions">
+          <button class="btn-icon" title="Preview" onclick="previewServerQueueItem('${
+            item.id
+          }')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+          </button>
+          <button class="btn-icon" title="Delete" onclick="deleteServerQueueItem('${
+            item.id
+          }')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `
+    )
+    .join("");
+}
+
+async function deleteServerQueueItem(itemId) {
+  if (!confirm("Delete this item from server queue?")) return;
+
+  try {
+    await API.deleteServerQueueItem(itemId);
+    await loadServerQueue();
+    showToast("success", "Item deleted", "Removed from server queue");
+  } catch (err) {
+    showToast("error", "Delete failed", err.message);
+  }
+}
+
+async function clearServerQueue() {
+  if (!confirm("Clear all items from server queue?")) return;
+
+  try {
+    await API.clearServerQueue();
+    await loadServerQueue();
+    showToast("success", "Server queue cleared", "All items removed");
+  } catch (err) {
+    showToast("error", "Clear failed", err.message);
+  }
+}
+
+async function importServerQueueToLocal() {
+  if (state.serverQueue.length === 0) {
+    showToast("warning", "Nothing to import", "Server queue is empty");
+    return;
+  }
+
+  const localQueue = StorageManager.getQueue();
+  const existingIds = new Set(localQueue.map((item) => item.id));
+
+  // Add items that don't already exist locally
+  let added = 0;
+  for (const item of state.serverQueue) {
+    if (!existingIds.has(item.id)) {
+      localQueue.push({ ...item, status: "pending" });
+      added++;
+    }
+  }
+
+  StorageManager.saveQueue(localQueue);
+  renderQueue();
+
+  if (added > 0) {
+    showToast("success", "Imported", `${added} items added to local queue`);
+  } else {
+    showToast("info", "No new items", "All items already in local queue");
+  }
+}
+
+async function processServerQueue() {
+  // Import to local first, then process
+  await importServerQueueToLocal();
+  closeServerQueueModal();
+  processQueue();
+}
+
+async function previewServerQueueItem(itemId) {
+  const item = state.serverQueue.find((i) => i.id === itemId);
+  if (!item) return;
+
+  closeServerQueueModal();
+  await previewQueueItemData(item);
+}
+
+async function previewQueueItem(itemId) {
+  const queue = StorageManager.getQueue();
+  const item = queue.find((i) => i.id === itemId);
+  if (!item) return;
+
+  await previewQueueItemData(item);
+}
+
+async function previewQueueItemData(item) {
+  state.previewSegmentIndex = null; // Clear since this is from queue
+
+  // Set up preview with item data
+  DOM.previewSegmentName.textContent =
+    item.uploadTitle || item.segmentName || "Queue Item";
+  DOM.previewSegmentDuration.textContent = `Duration: ${formatTime(
+    item.endTime - item.startTime
+  )}`;
+  DOM.previewModal.classList.remove("hidden");
+  DOM.previewLoading.classList.remove("hidden");
+  DOM.previewVideo.classList.add("hidden");
+
+  try {
+    const result = await processSegmentWithFallback(
+      item.videoId,
+      item.startTime,
+      item.endTime,
+      0,
+      item.textOverlay || ""
+    );
+
+    if (result.segmentPath) {
+      DOM.previewVideo.src = `${API.baseUrl}${result.segmentPath}`;
+    } else if (result.blob) {
+      DOM.previewVideo.src = URL.createObjectURL(result.blob);
+    }
+
+    DOM.previewLoading.classList.add("hidden");
+    DOM.previewVideo.classList.remove("hidden");
+  } catch (err) {
+    showToast("error", "Preview failed", err.message);
+    DOM.previewModal.classList.add("hidden");
+  }
+}
+
+// Remove item from both local and server queue after processing
+async function removeProcessedItem(itemId) {
+  // Remove from local
+  const queue = StorageManager.getQueue();
+  const filtered = queue.filter((item) => item.id !== itemId);
+  StorageManager.saveQueue(filtered);
+  renderQueue();
+
+  // Also remove from server if it exists there
+  try {
+    await API.deleteServerQueueItem(itemId);
+    updateServerQueueBadge();
+  } catch (err) {
+    // Ignore errors - item might not exist on server
+  }
+}
+
 async function processQueue() {
   const queue = StorageManager.getQueue();
   const pendingItems = queue.filter((item) => item.status === "pending");
@@ -2378,10 +2727,24 @@ async function processQueue() {
     renderQueue();
   }
 
-  // Remove completed items after a delay
-  setTimeout(() => {
+  // Remove completed items after a delay (both local and server)
+  setTimeout(async () => {
+    const completedItems = StorageManager.getQueue().filter(
+      (q) => q.status === "completed"
+    );
+
+    // Remove from server queue too
+    for (const item of completedItems) {
+      try {
+        await API.deleteServerQueueItem(item.id);
+      } catch (e) {
+        // Ignore - item might not exist on server
+      }
+    }
+
     StorageManager.clearCompletedFromQueue();
     renderQueue();
+    updateServerQueueBadge();
   }, 3000);
 
   state.queueProcessing = false;
@@ -2510,6 +2873,27 @@ function handleVideoSearch() {
 
 // ============ Initialize ============
 async function init() {
+  // Check environment (production vs development)
+  try {
+    const env = await API.getEnvironment();
+    state.isProduction = env.isProduction;
+
+    if (state.isProduction) {
+      document.body.classList.add("production-mode");
+      console.log("🏭 Running in PRODUCTION mode - local processing disabled");
+
+      // Add production badge to header
+      const header = document.querySelector(".header-brand h1");
+      if (header) {
+        header.innerHTML += '<span class="production-badge">SERVER</span>';
+      }
+    } else {
+      console.log("🔧 Running in DEVELOPMENT mode - full features enabled");
+    }
+  } catch (err) {
+    console.warn("Could not check environment:", err.message);
+  }
+
   // Check for auth callback
   const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get("auth") === "success") {
@@ -2522,6 +2906,11 @@ async function init() {
 
   // Check auth status
   await checkAuthStatus();
+
+  // Load server queue badge (if authenticated)
+  if (state.authenticated) {
+    updateServerQueueBadge();
+  }
 
   // Load saved channel
   const savedChannel = StorageManager.getSelectedChannel();
@@ -2722,6 +3111,18 @@ async function init() {
     DOM.queueSidebar.classList.toggle("collapsed");
   });
 
+  // Server queue event listeners
+  DOM.sendToServerBtn.addEventListener("click", sendQueueToServer);
+  DOM.viewServerQueueBtn.addEventListener("click", openServerQueueModal);
+  DOM.closeServerQueueBtn.addEventListener("click", closeServerQueueModal);
+  DOM.refreshServerQueueBtn.addEventListener("click", loadServerQueue);
+  DOM.importServerQueueBtn.addEventListener("click", importServerQueueToLocal);
+  DOM.processServerQueueBtn.addEventListener("click", processServerQueue);
+  DOM.clearServerQueueBtn.addEventListener("click", clearServerQueue);
+  DOM.serverQueueModal
+    .querySelector(".modal-backdrop")
+    .addEventListener("click", closeServerQueueModal);
+
   // Queue edit modal events
   DOM.closeQueueEditBtn.addEventListener("click", closeQueueEditModal);
   DOM.queueEditCancelBtn.addEventListener("click", closeQueueEditModal);
@@ -2789,6 +3190,9 @@ window.toggleIgnoreVideo = toggleIgnoreVideo;
 window.addToQueue = addToQueue;
 window.removeFromQueue = removeFromQueue;
 window.editQueueItem = editQueueItem;
+window.previewQueueItem = previewQueueItem;
+window.deleteServerQueueItem = deleteServerQueueItem;
+window.previewServerQueueItem = previewServerQueueItem;
 
 // Start app
 document.addEventListener("DOMContentLoaded", init);

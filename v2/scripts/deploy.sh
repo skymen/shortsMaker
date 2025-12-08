@@ -33,6 +33,8 @@ rsync -avz --delete \
   --exclude '.git' \
   --exclude '.DS_Store' \
   --exclude '*.log' \
+  --exclude 'videos/' \
+  --exclude 'queues/' \
   ./ "$SERVER:$APP_DIR/"
 
 echo ""

@@ -501,7 +501,7 @@
             <div class="queue-actions">
               <button
                 id="process-queue-btn"
-                class="btn btn-primary btn-small"
+                class="btn btn-primary btn-small local-only"
                 disabled
               >
                 <svg
@@ -514,7 +514,25 @@
                 >
                   <polygon points="5 3 19 12 5 21 5 3"></polygon>
                 </svg>
-                Process Queue
+                Process
+              </button>
+              <button
+                id="send-to-server-btn"
+                class="btn btn-accent btn-small"
+                disabled
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  width="14"
+                  height="14"
+                >
+                  <path d="M22 2L11 13"></path>
+                  <path d="M22 2L15 22L11 13L2 9L22 2Z"></path>
+                </svg>
+                Send to Server
               </button>
               <button id="clear-queue-btn" class="btn btn-small" disabled>
                 <svg
@@ -531,6 +549,27 @@
                   ></path>
                 </svg>
                 Clear
+              </button>
+            </div>
+            <div class="queue-actions queue-server-actions">
+              <button
+                id="view-server-queue-btn"
+                class="btn btn-secondary btn-small"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  width="14"
+                  height="14"
+                >
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                  <line x1="8" y1="21" x2="16" y2="21"></line>
+                  <line x1="12" y1="17" x2="12" y2="21"></line>
+                </svg>
+                Server Queue
+                <span class="server-queue-badge" id="server-queue-badge"></span>
               </button>
             </div>
             <div class="queue-list" id="queue-list">
@@ -700,6 +739,94 @@
                   <line x1="12" y1="3" x2="12" y2="15"></line>
                 </svg>
                 Upload to YouTube
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Server Queue Modal -->
+      <div id="server-queue-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content server-queue-content">
+          <div class="modal-header">
+            <h3>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                width="20"
+                height="20"
+              >
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+              </svg>
+              Server Queue
+            </h3>
+            <button id="close-server-queue-btn" class="btn-icon" title="Close">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="server-queue-info">
+              <span id="server-queue-status">Loading...</span>
+              <button id="refresh-server-queue-btn" class="btn btn-small">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  width="14"
+                  height="14"
+                >
+                  <path d="M23 4v6h-6"></path>
+                  <path d="M1 20v-6h6"></path>
+                  <path
+                    d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+                  ></path>
+                </svg>
+                Refresh
+              </button>
+            </div>
+            <div class="server-queue-list" id="server-queue-list">
+              <div class="queue-empty">
+                <p>No items in server queue</p>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <div class="server-queue-actions">
+              <button id="import-server-queue-btn" class="btn">
+                Import to Local
+              </button>
+              <button
+                id="process-server-queue-btn"
+                class="btn btn-primary local-only"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  width="16"
+                  height="16"
+                >
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                Process All
+              </button>
+              <button id="clear-server-queue-btn" class="btn btn-danger">
+                Clear Server Queue
               </button>
             </div>
           </div>

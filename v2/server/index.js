@@ -73,6 +73,7 @@ app.get("/api/auth/url", (req, res) => {
     "https://www.googleapis.com/auth/youtube.readonly",
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.force-ssl",
+    "https://www.googleapis.com/auth/userinfo.profile",
   ];
 
   const authUrl = oauth2Client.generateAuthUrl({
@@ -1422,6 +1423,210 @@ app.post("/api/youtube/upload-segment", async (req, res) => {
   } catch (error) {
     console.error("Upload error:", error);
     res.status(500).json({ error: "Failed to upload video" });
+  }
+});
+
+// ============ SERVER QUEUE MANAGEMENT ============
+// Allows saving queue data on the server for processing later
+
+const queuesDir = path.join(__dirname, "../queues");
+if (!fs.existsSync(queuesDir)) fs.mkdirSync(queuesDir, { recursive: true });
+
+// Get queue file path for a user
+function getQueuePath(userId) {
+  return path.join(queuesDir, `${userId}.json`);
+}
+
+// Environment check endpoint
+app.get("/api/env", (req, res) => {
+  res.json({
+    isProduction: IS_PRODUCTION,
+    environment: process.env.NODE_ENV || "development",
+  });
+});
+
+// Get server queue for current user
+app.get("/api/queue/server", (req, res) => {
+  if (!userTokens) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  try {
+    // Get user ID from tokens
+    const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
+    oauth2.userinfo.get((err, response) => {
+      if (err) {
+        console.error("Failed to get user info:", err.message);
+        return res
+          .status(500)
+          .json({ error: "Failed to get user info: " + err.message });
+      }
+
+      const userId = response.data.id;
+      const queuePath = getQueuePath(userId);
+
+      if (!fs.existsSync(queuePath)) {
+        return res.json({ queue: [], userId });
+      }
+
+      const data = JSON.parse(fs.readFileSync(queuePath, "utf8"));
+      res.json({ queue: data.queue || [], userId, updatedAt: data.updatedAt });
+    });
+  } catch (error) {
+    console.error("Error getting server queue:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save queue to server
+app.post("/api/queue/server", (req, res) => {
+  if (!userTokens) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  const { queue } = req.body;
+  if (!Array.isArray(queue)) {
+    return res.status(400).json({ error: "Queue must be an array" });
+  }
+
+  try {
+    const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
+    oauth2.userinfo.get((err, response) => {
+      if (err) {
+        console.error("Failed to get user info:", err.message);
+        return res
+          .status(500)
+          .json({ error: "Failed to get user info: " + err.message });
+      }
+
+      const userId = response.data.id;
+      const queuePath = getQueuePath(userId);
+
+      const data = {
+        userId,
+        queue,
+        updatedAt: new Date().toISOString(),
+      };
+
+      fs.writeFileSync(queuePath, JSON.stringify(data, null, 2));
+      console.log(`✅ Queue saved for user ${userId} (${queue.length} items)`);
+
+      res.json({ success: true, count: queue.length });
+    });
+  } catch (error) {
+    console.error("Error saving server queue:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update single item in server queue
+app.put("/api/queue/server/:itemId", (req, res) => {
+  if (!userTokens) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  const { itemId } = req.params;
+  const updates = req.body;
+
+  try {
+    const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
+    oauth2.userinfo.get((err, response) => {
+      if (err) {
+        return res.status(500).json({ error: "Failed to get user info" });
+      }
+
+      const userId = response.data.id;
+      const queuePath = getQueuePath(userId);
+
+      if (!fs.existsSync(queuePath)) {
+        return res.status(404).json({ error: "No queue found" });
+      }
+
+      const data = JSON.parse(fs.readFileSync(queuePath, "utf8"));
+      const index = data.queue.findIndex((item) => item.id === itemId);
+
+      if (index === -1) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+
+      data.queue[index] = { ...data.queue[index], ...updates };
+      data.updatedAt = new Date().toISOString();
+
+      fs.writeFileSync(queuePath, JSON.stringify(data, null, 2));
+      res.json({ success: true, item: data.queue[index] });
+    });
+  } catch (error) {
+    console.error("Error updating queue item:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete item from server queue
+app.delete("/api/queue/server/:itemId", (req, res) => {
+  if (!userTokens) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  const { itemId } = req.params;
+
+  try {
+    const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
+    oauth2.userinfo.get((err, response) => {
+      if (err) {
+        return res.status(500).json({ error: "Failed to get user info" });
+      }
+
+      const userId = response.data.id;
+      const queuePath = getQueuePath(userId);
+
+      if (!fs.existsSync(queuePath)) {
+        return res.status(404).json({ error: "No queue found" });
+      }
+
+      const data = JSON.parse(fs.readFileSync(queuePath, "utf8"));
+      const initialLength = data.queue.length;
+      data.queue = data.queue.filter((item) => item.id !== itemId);
+
+      if (data.queue.length === initialLength) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+
+      data.updatedAt = new Date().toISOString();
+      fs.writeFileSync(queuePath, JSON.stringify(data, null, 2));
+
+      res.json({ success: true, remaining: data.queue.length });
+    });
+  } catch (error) {
+    console.error("Error deleting queue item:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Clear entire server queue
+app.delete("/api/queue/server", (req, res) => {
+  if (!userTokens) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  try {
+    const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
+    oauth2.userinfo.get((err, response) => {
+      if (err) {
+        return res.status(500).json({ error: "Failed to get user info" });
+      }
+
+      const userId = response.data.id;
+      const queuePath = getQueuePath(userId);
+
+      if (fs.existsSync(queuePath)) {
+        fs.unlinkSync(queuePath);
+      }
+
+      res.json({ success: true });
+    });
+  } catch (error) {
+    console.error("Error clearing server queue:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 

@@ -5,6 +5,7 @@ node_modules/
 temp/
 output/
 videos/
+queues/
 *.log
 .DS_Store
 package-lock.json

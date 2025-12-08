@@ -135,7 +135,231 @@ const API = {
     if (!res.ok) throw new Error("Failed to upload");
     return res.json();
   },
+
+  // Get direct video URL for client-side download fallback
+  async getVideoUrl(videoId) {
+    const res = await fetch(`${this.baseUrl}/api/video/get-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoId }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.details || "Failed to get video URL");
+    }
+    return res.json();
+  },
+
+  // Upload client-downloaded video to server
+  async uploadClientVideo(videoId, videoBlob, onProgress) {
+    const formData = new FormData();
+    formData.append("videoId", videoId);
+    formData.append("video", videoBlob, `${videoId}.mp4`);
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${this.baseUrl}/api/video/upload-client`);
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(JSON.parse(xhr.responseText));
+        } else {
+          reject(new Error("Failed to upload video to server"));
+        }
+      };
+
+      xhr.onerror = () => reject(new Error("Network error uploading video"));
+      xhr.send(formData);
+    });
+  },
+
+  // Check if video is already cached on server
+  async checkVideoStatus(videoId) {
+    const res = await fetch(`${this.baseUrl}/api/video/status/${videoId}`);
+    if (!res.ok) throw new Error("Failed to check video status");
+    return res.json();
+  },
 };
+
+// ============ Client-Side Video Download ============
+const ClientDownloader = {
+  // Download video in browser and upload to server
+  async downloadAndUpload(videoId, onProgress) {
+    onProgress?.({ stage: "Getting video URL...", percent: 0 });
+
+    // Step 1: Get direct video URL from server
+    const urlResult = await API.getVideoUrl(videoId);
+    if (!urlResult.success) {
+      throw new Error("Could not get video URL");
+    }
+
+    onProgress?.({ stage: "Downloading video...", percent: 5 });
+
+    // Step 2: Download video in browser
+    const videoBlob = await this.fetchVideoBlob(
+      urlResult.videoUrl,
+      (percent) => {
+        onProgress?.({
+          stage: "Downloading video...",
+          percent: 5 + percent * 0.7,
+        });
+      }
+    );
+
+    onProgress?.({ stage: "Uploading to server...", percent: 75 });
+
+    // Step 3: Upload to server
+    const uploadResult = await API.uploadClientVideo(
+      videoId,
+      videoBlob,
+      (percent) => {
+        onProgress?.({
+          stage: "Uploading to server...",
+          percent: 75 + percent * 0.25,
+        });
+      }
+    );
+
+    onProgress?.({ stage: "Complete!", percent: 100 });
+    return uploadResult;
+  },
+
+  // Fetch video as blob with progress
+  async fetchVideoBlob(url, onProgress) {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to download: ${response.status}`);
+    }
+
+    const contentLength = response.headers.get("content-length");
+    const total = contentLength ? parseInt(contentLength, 10) : 0;
+    const reader = response.body.getReader();
+    const chunks = [];
+    let received = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      chunks.push(value);
+      received += value.length;
+
+      if (total > 0 && onProgress) {
+        onProgress(Math.round((received / total) * 100));
+      }
+    }
+
+    return new Blob(chunks, { type: "video/mp4" });
+  },
+};
+
+// ============ Video Download with Fallback ============
+// Ensures video is available on server, using client-side download as fallback
+async function ensureVideoDownloaded(videoId, onProgress) {
+  // First check if already cached on server
+  try {
+    const status = await API.checkVideoStatus(videoId);
+    if (status.status === "ready") {
+      onProgress?.({ stage: "Video already cached", percent: 100 });
+      return { success: true, cached: true, videoUrl: status.videoUrl };
+    }
+  } catch (e) {
+    console.log("Could not check video status:", e.message);
+  }
+
+  // Try server-side download first (might work for some videos)
+  onProgress?.({ stage: "Trying server download...", percent: 10 });
+
+  try {
+    const res = await fetch(`${API.baseUrl}/api/video/download`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoId }),
+    });
+
+    if (res.ok) {
+      const result = await res.json();
+      if (result.success) {
+        onProgress?.({ stage: "Downloaded on server", percent: 100 });
+        return {
+          success: true,
+          cached: result.cached,
+          videoUrl: result.videoUrl,
+        };
+      }
+    }
+
+    // Check if the error indicates blocking
+    const errorData = await res.json().catch(() => ({}));
+    if (
+      errorData.details?.includes("403") ||
+      errorData.details?.includes("Sign in")
+    ) {
+      console.log("Server download blocked, trying client fallback...");
+    } else {
+      throw new Error(errorData.error || "Server download failed");
+    }
+  } catch (e) {
+    console.log("Server download failed:", e.message);
+    // Continue to client fallback
+  }
+
+  // Fallback: Client-side download
+  onProgress?.({ stage: "Using client download (your IP)...", percent: 15 });
+  showToast(
+    "info",
+    "Fallback",
+    "Server blocked - downloading through your browser..."
+  );
+
+  try {
+    const result = await ClientDownloader.downloadAndUpload(
+      videoId,
+      onProgress
+    );
+    return {
+      success: true,
+      cached: false,
+      videoUrl: result.videoUrl,
+      clientDownload: true,
+    };
+  } catch (e) {
+    throw new Error(`Client download also failed: ${e.message}`);
+  }
+}
+
+// Process segment with automatic download fallback
+async function processSegmentWithFallback(
+  videoId,
+  start,
+  end,
+  segmentIndex,
+  overlayText,
+  onProgress
+) {
+  // First ensure the video is available on the server
+  await ensureVideoDownloaded(videoId, onProgress);
+
+  // Now process the segment (video is guaranteed to be on server)
+  onProgress?.({ stage: "Processing segment...", percent: 90 });
+
+  const result = await API.processSegment(
+    videoId,
+    start,
+    end,
+    segmentIndex,
+    overlayText
+  );
+
+  onProgress?.({ stage: "Complete!", percent: 100 });
+  return result;
+}
 
 // ============ DOM Elements ============
 const DOM = {
@@ -1012,13 +1236,23 @@ async function previewSegment(index) {
   DOM.previewCacheStatus.className = "cache-badge";
   state.previewSegmentIndex = index;
 
+  // Update loading text helper
+  const updateLoadingText = (text) => {
+    const loadingEl = DOM.previewLoading.querySelector("p");
+    if (loadingEl) loadingEl.textContent = text;
+  };
+
   try {
-    const result = await API.processSegment(
+    // Use the fallback-enabled processing
+    const result = await processSegmentWithFallback(
       videoId,
       start,
       end,
       index + 1,
-      fullOverlayText
+      fullOverlayText,
+      (progress) => {
+        updateLoadingText(progress.stage);
+      }
     );
 
     if (result.success) {
@@ -1435,8 +1669,35 @@ async function processQueue() {
     `Starting to process ${pendingItems.length} item(s)...`
   );
 
-  // Process all items in parallel (rendering)
-  const processPromises = pendingItems.map(async (item) => {
+  // First, ensure all unique videos are downloaded (with fallback)
+  const uniqueVideoIds = [...new Set(pendingItems.map((item) => item.videoId))];
+  for (const videoId of uniqueVideoIds) {
+    try {
+      await ensureVideoDownloaded(videoId, (progress) => {
+        console.log(`[${videoId}] ${progress.stage}`);
+      });
+    } catch (e) {
+      console.error(`Failed to download video ${videoId}:`, e.message);
+      // Mark all items for this video as error
+      pendingItems
+        .filter((item) => item.videoId === videoId)
+        .forEach((item) => {
+          StorageManager.updateQueueItem(item.id, {
+            status: "error",
+            error: `Download failed: ${e.message}`,
+          });
+        });
+    }
+  }
+  renderQueue();
+
+  // Process all items in parallel (rendering) - videos should now be cached
+  const remainingItems = pendingItems.filter((item) => {
+    const current = StorageManager.getQueue().find((q) => q.id === item.id);
+    return current && current.status === "pending";
+  });
+
+  const processPromises = remainingItems.map(async (item) => {
     try {
       StorageManager.updateQueueItem(item.id, { status: "processing" });
       renderQueue();
@@ -1595,14 +1856,17 @@ async function uploadSegment(index) {
   const fullOverlayText = overlayLines.join("\n");
 
   try {
-    // First ensure the segment is processed
+    // First ensure the segment is processed (with download fallback)
     showToast("info", "Processing", "Preparing segment for upload...");
-    const processResult = await API.processSegment(
+    const processResult = await processSegmentWithFallback(
       state.selectedVideo.id,
       start,
       end,
       index + 1,
-      fullOverlayText
+      fullOverlayText,
+      (progress) => {
+        showToast("info", "Processing", progress.stage);
+      }
     );
 
     if (!processResult.success) {

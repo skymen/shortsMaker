@@ -561,6 +561,118 @@ app.post("/api/video/download", async (req, res) => {
   }
 });
 
+// Get direct video URL for client-side download (fallback when server download is blocked)
+app.post("/api/video/get-url", async (req, res) => {
+  const { videoId } = req.body;
+
+  if (!videoId) {
+    return res.status(400).json({ error: "Video ID required" });
+  }
+
+  try {
+    const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+    // Use yt-dlp to get the direct video URL without downloading
+    // Try to get a format that works well in browsers
+    const formats = [
+      "best[ext=mp4]/best", // Prefer mp4 for browser compatibility
+      "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
+      "best",
+    ];
+
+    let videoUrl = null;
+    let lastError = null;
+
+    for (const format of formats) {
+      try {
+        const cookiesArg = hasCookies ? `--cookies "${cookiesPath}"` : "";
+        const cmd = `${ytdlpPath} ${cookiesArg} -f "${format}" --get-url "${youtubeUrl}"`;
+        const { stdout } = await execPromise(cmd, { timeout: 30000 });
+
+        // yt-dlp might return multiple URLs (video + audio), take the first one
+        const urls = stdout
+          .trim()
+          .split("\n")
+          .filter((u) => u.startsWith("http"));
+        if (urls.length > 0) {
+          videoUrl = urls[0];
+          break;
+        }
+      } catch (e) {
+        lastError = e;
+        console.log(
+          `Format ${format} failed for URL extraction:`,
+          e.message?.substring(0, 100)
+        );
+      }
+    }
+
+    if (!videoUrl) {
+      throw lastError || new Error("Could not extract video URL");
+    }
+
+    res.json({
+      success: true,
+      videoUrl,
+      videoId,
+      note: "URL expires quickly, download immediately",
+    });
+  } catch (error) {
+    console.error("URL extraction error:", error);
+    res.status(500).json({
+      error: "Failed to extract video URL",
+      details: error.message,
+      blocked:
+        error.message?.includes("HTTP Error 403") ||
+        error.message?.includes("Sign in to confirm"),
+    });
+  }
+});
+
+// Receive video uploaded from client (for client-side download fallback)
+app.post(
+  "/api/video/upload-client",
+  upload.single("video"),
+  async (req, res) => {
+    const { videoId } = req.body;
+
+    if (!videoId) {
+      return res.status(400).json({ error: "Video ID required" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No video file provided" });
+    }
+
+    try {
+      const outputFilename = `${videoId}.mp4`;
+      const outputPath = path.join(videosDir, outputFilename);
+
+      // Move the uploaded file to the videos directory
+      fs.renameSync(req.file.path, outputPath);
+
+      console.log(`Client-uploaded video saved: ${outputFilename}`);
+
+      res.json({
+        success: true,
+        videoUrl: `/videos/${outputFilename}`,
+        cached: false,
+        source: "client-upload",
+      });
+    } catch (error) {
+      console.error("Client upload error:", error);
+      // Clean up the temp file if it exists
+      if (req.file?.path && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      res.status(500).json({
+        error: "Failed to save uploaded video",
+        details: error.message,
+      });
+    }
+  }
+);
+
 // Check download status
 app.get("/api/video/status/:videoId", (req, res) => {
   const { videoId } = req.params;

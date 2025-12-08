@@ -244,6 +244,144 @@ if (!fs.existsSync(videosDir)) fs.mkdirSync(videosDir, { recursive: true });
 // Serve downloaded videos
 app.use("/videos", express.static(videosDir));
 
+// ============ CACHE MANAGEMENT ============
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const CACHE_MAX_SIZE_BYTES = 10 * 1024 * 1024 * 1024; // 10 GB max cache size
+
+// Get all cached video files with their stats
+function getCachedVideoFiles() {
+  if (!fs.existsSync(videosDir)) return [];
+
+  const files = fs
+    .readdirSync(videosDir)
+    .filter((f) => f.endsWith(".mp4"))
+    .map((filename) => {
+      const filepath = path.join(videosDir, filename);
+      try {
+        const stats = fs.statSync(filepath);
+        return {
+          filename,
+          filepath,
+          size: stats.size,
+          mtime: stats.mtime.getTime(),
+          age: Date.now() - stats.mtime.getTime(),
+        };
+      } catch (e) {
+        return null;
+      }
+    })
+    .filter((f) => f !== null);
+
+  // Sort by modification time (oldest first)
+  return files.sort((a, b) => a.mtime - b.mtime);
+}
+
+// Clean videos older than 24 hours
+function cleanOldCacheFiles() {
+  const files = getCachedVideoFiles();
+  let removedCount = 0;
+  let freedBytes = 0;
+
+  for (const file of files) {
+    if (file.age > CACHE_MAX_AGE_MS) {
+      try {
+        fs.unlinkSync(file.filepath);
+        removedCount++;
+        freedBytes += file.size;
+        console.log(
+          `🗑️  Removed old cache file: ${file.filename} (age: ${Math.round(
+            file.age / 3600000
+          )}h)`
+        );
+      } catch (e) {
+        console.error(`Failed to remove ${file.filename}:`, e.message);
+      }
+    }
+  }
+
+  if (removedCount > 0) {
+    console.log(
+      `🧹 Cache cleanup: removed ${removedCount} old files, freed ${(
+        freedBytes /
+        1024 /
+        1024
+      ).toFixed(1)} MB`
+    );
+  }
+
+  return { removedCount, freedBytes };
+}
+
+// Enforce max cache size by removing oldest files
+function enforceMaxCacheSize() {
+  const files = getCachedVideoFiles();
+  const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+
+  if (totalSize <= CACHE_MAX_SIZE_BYTES) {
+    return { removedCount: 0, freedBytes: 0 };
+  }
+
+  let currentSize = totalSize;
+  let removedCount = 0;
+  let freedBytes = 0;
+
+  // Remove oldest files until under limit
+  for (const file of files) {
+    if (currentSize <= CACHE_MAX_SIZE_BYTES) break;
+
+    try {
+      fs.unlinkSync(file.filepath);
+      currentSize -= file.size;
+      freedBytes += file.size;
+      removedCount++;
+      console.log(
+        `🗑️  Removed to free space: ${file.filename} (${(
+          file.size /
+          1024 /
+          1024
+        ).toFixed(1)} MB)`
+      );
+    } catch (e) {
+      console.error(`Failed to remove ${file.filename}:`, e.message);
+    }
+  }
+
+  if (removedCount > 0) {
+    console.log(
+      `📦 Cache size limit: removed ${removedCount} files, freed ${(
+        freedBytes /
+        1024 /
+        1024
+      ).toFixed(1)} MB`
+    );
+  }
+
+  return { removedCount, freedBytes };
+}
+
+// Main cache cleanup function - call before processing new videos
+function cleanupVideoCache() {
+  console.log("🔍 Checking video cache...");
+  const oldCleanup = cleanOldCacheFiles();
+  const sizeCleanup = enforceMaxCacheSize();
+
+  const totalRemoved = oldCleanup.removedCount + sizeCleanup.removedCount;
+  if (totalRemoved === 0) {
+    const files = getCachedVideoFiles();
+    const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+    console.log(
+      `✅ Cache OK: ${files.length} files, ${(totalSize / 1024 / 1024).toFixed(
+        1
+      )} MB`
+    );
+  }
+
+  return {
+    removedCount: totalRemoved,
+    freedBytes: oldCleanup.freedBytes + sizeCleanup.freedBytes,
+  };
+}
+
 // Cookies file path for yt-dlp (to bypass bot detection)
 const cookiesPath = path.join(__dirname, "../cookies.txt");
 const hasCookies = fs.existsSync(cookiesPath);
@@ -528,6 +666,9 @@ app.post("/api/video/download", async (req, res) => {
     });
   }
 
+  // Clean up old/excess cache before downloading new video
+  cleanupVideoCache();
+
   try {
     console.log(`Downloading video: ${videoId}`);
     downloadProgress.set(videoId, { status: "downloading", progress: 0 });
@@ -644,6 +785,9 @@ app.post(
       return res.status(400).json({ error: "No video file provided" });
     }
 
+    // Clean up old/excess cache before saving new video
+    cleanupVideoCache();
+
     try {
       const outputFilename = `${videoId}.mp4`;
       const outputPath = path.join(videosDir, outputFilename);
@@ -691,6 +835,39 @@ app.get("/api/video/status/:videoId", (req, res) => {
   res.json({ status: "not_started" });
 });
 
+// Get cache status
+app.get("/api/cache/status", (req, res) => {
+  const files = getCachedVideoFiles();
+  const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+
+  res.json({
+    fileCount: files.length,
+    totalSizeMB: Math.round(totalSize / 1024 / 1024),
+    maxSizeMB: Math.round(CACHE_MAX_SIZE_BYTES / 1024 / 1024),
+    maxAgeHours: Math.round(CACHE_MAX_AGE_MS / 3600000),
+    files: files.map((f) => ({
+      filename: f.filename,
+      sizeMB: Math.round(f.size / 1024 / 1024),
+      ageHours: Math.round(f.age / 3600000),
+    })),
+  });
+});
+
+// Manually trigger cache cleanup
+app.post("/api/cache/cleanup", (req, res) => {
+  const result = cleanupVideoCache();
+  const files = getCachedVideoFiles();
+  const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+
+  res.json({
+    success: true,
+    removedCount: result.removedCount,
+    freedMB: Math.round(result.freedBytes / 1024 / 1024),
+    remainingFiles: files.length,
+    remainingSizeMB: Math.round(totalSize / 1024 / 1024),
+  });
+});
+
 // Helper function to download YouTube video segment
 // Strategy: Download full video first with yt-dlp, then cut with ffmpeg
 async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
@@ -703,6 +880,9 @@ async function downloadYouTubeSegment(videoId, startTime, endTime, outputPath) {
   try {
     // Step 1: Download full video if not cached
     if (!fs.existsSync(cachedVideoPath)) {
+      // Clean up old/excess cache before downloading new video
+      cleanupVideoCache();
+
       console.log(`Downloading full video: ${videoId}`);
 
       // Try multiple format options - prefer highest quality

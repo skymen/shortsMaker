@@ -242,18 +242,8 @@ const ClientDownloader = {
   async downloadAndUpload(videoId, onProgress) {
     onProgress?.({ stage: "Getting video URL...", percent: 0 });
 
-    // Step 1: Get direct video URL (try client-side first, then server)
-    let urlResult;
-
-    try {
-      // Try Invidious API first (fully client-side)
-      urlResult = await ClientYouTube.getVideoUrl(videoId);
-    } catch (e) {
-      console.log("Client URL extraction failed, trying server...", e.message);
-      // Fallback to server
-      urlResult = await API.getVideoUrl(videoId);
-    }
-
+    // Get direct video URL via Invidious (through server proxy)
+    const urlResult = await ClientYouTube.getVideoUrl(videoId);
     if (!urlResult?.success) {
       throw new Error("Could not get video URL");
     }
@@ -330,6 +320,7 @@ const ClientDownloader = {
 };
 
 // ============ FFmpeg.wasm Client-Side Processor ============
+// Uses FFmpegWASM global from local assets (see scripts/download-ffmpeg.js)
 const ClientFFmpeg = {
   ffmpeg: null,
   loaded: false,
@@ -348,26 +339,35 @@ const ClientFFmpeg = {
 
     this.loading = true;
     try {
-      // Check if FFmpeg is available
-      if (typeof FFmpeg === "undefined") {
-        console.warn("FFmpeg.wasm not loaded - library not found");
+      // Check if FFmpegWASM is available (loaded from local assets)
+      if (typeof FFmpegWASM === "undefined" || !FFmpegWASM.FFmpeg) {
+        console.warn(
+          "FFmpeg.wasm not loaded. Run: node scripts/download-ffmpeg.js"
+        );
         this.loading = false;
         return false;
       }
 
-      this.ffmpeg = new FFmpeg.FFmpeg();
+      console.log("Creating FFmpeg instance...");
+      this.ffmpeg = new FFmpegWASM.FFmpeg();
 
-      // Use single-threaded core (no SharedArrayBuffer required)
-      // This works in all browsers without special headers
-      const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+      // Log progress
+      this.ffmpeg.on("log", ({ message }) => {
+        console.log("[FFmpeg]", message);
+      });
 
+      this.ffmpeg.on("progress", ({ progress }) => {
+        console.log(`[FFmpeg] Progress: ${(progress * 100).toFixed(1)}%`);
+      });
+
+      // Load FFmpeg core from local assets
+      console.log("Loading FFmpeg core from local assets...");
       await this.ffmpeg.load({
-        coreURL: `${baseURL}/ffmpeg-core.js`,
-        wasmURL: `${baseURL}/ffmpeg-core.wasm`,
+        coreURL: "/assets/ffmpeg/ffmpeg-core.js",
       });
 
       this.loaded = true;
-      console.log("✅ FFmpeg.wasm loaded successfully (single-threaded mode)");
+      console.log("✅ FFmpeg.wasm loaded successfully");
       return true;
     } catch (e) {
       console.error("Failed to load FFmpeg.wasm:", e);
@@ -446,69 +446,199 @@ const ClientFFmpeg = {
 // ============ Client-Side YouTube URL Extraction ============
 // Uses Invidious API (via server proxy to bypass CORS)
 const ClientYouTube = {
-  // List of public Invidious instances to try
+  // List of public Invidious instances with API enabled (updated regularly)
+  // Check https://api.invidious.io/ for current list
   instances: [
     "https://inv.nadeko.net",
     "https://invidious.nerdvpn.de",
-    "https://vid.puffyan.us",
-    "https://invidious.snopyta.org",
+    "https://invidious.f5.si",
+    "https://inv.perditum.com",
     "https://yewtu.be",
   ],
+
+  // Check if response is a Cloudflare challenge page
+  isCloudflareChallenge(text) {
+    return (
+      text.includes("Just a moment...") ||
+      text.includes("_cf_chl_opt") ||
+      text.includes("challenge-platform")
+    );
+  },
+
+  // Show challenge to user in popup and wait for completion
+  async handleCloudflareChallenge(url, instance) {
+    return new Promise((resolve, reject) => {
+      // Show modal to user
+      const modal = document.createElement("div");
+      modal.id = "cf-challenge-modal";
+      modal.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;">
+          <div style="background:#1a1a2e;border-radius:12px;padding:20px;max-width:600px;width:100%;color:white;">
+            <h3 style="margin:0 0 10px 0;">⚠️ Cloudflare Challenge</h3>
+            <p style="margin:0 0 15px 0;color:#aaa;">
+              The Invidious instance <strong>${instance}</strong> requires verification.
+              Click the button below to complete the challenge in a new tab, then click "Done" when finished.
+            </p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button id="cf-open-btn" style="flex:1;min-width:120px;padding:12px;background:#4a90d9;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;">
+                🔗 Open Challenge
+              </button>
+              <button id="cf-done-btn" style="flex:1;min-width:120px;padding:12px;background:#2ecc71;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;">
+                ✅ Retry (Direct)
+              </button>
+              <button id="cf-proxy-btn" style="flex:1;min-width:120px;padding:12px;background:#9b59b6;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;">
+                🔄 Retry (Proxy)
+              </button>
+              <button id="cf-skip-btn" style="flex:1;min-width:120px;padding:12px;background:#666;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;">
+                ⏭️ Skip Instance
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+
+      // Open challenge URL directly (not proxied)
+      document.getElementById("cf-open-btn").onclick = () => {
+        window.open(url, "_blank", "width=600,height=700");
+      };
+
+      // Retry with direct fetch (browser has cookies now)
+      document.getElementById("cf-done-btn").onclick = () => {
+        modal.remove();
+        resolve("retry-direct");
+      };
+
+      // Retry via proxy (in case challenge was IP-based)
+      document.getElementById("cf-proxy-btn").onclick = () => {
+        modal.remove();
+        resolve("retry-proxy");
+      };
+
+      // Skip this instance
+      document.getElementById("cf-skip-btn").onclick = () => {
+        modal.remove();
+        resolve("skip");
+      };
+    });
+  },
 
   async getVideoUrl(videoId) {
     let lastError = null;
 
     for (const instance of this.instances) {
-      try {
-        console.log(`Trying Invidious instance (via proxy): ${instance}`);
+      let retries = 0;
+      const maxRetries = 2;
 
-        // Use server proxy to bypass CORS
-        const apiUrl = `${instance}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`;
-        const response = await fetch(
-          `${API.baseUrl}/api/proxy?url=${encodeURIComponent(apiUrl)}`,
-          { signal: AbortSignal.timeout(15000) }
-        );
+      while (retries < maxRetries) {
+        try {
+          console.log(`Trying Invidious instance (via proxy): ${instance}`);
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+          // Use server proxy to bypass CORS
+          const apiUrl = `${instance}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`;
+          const response = await fetch(
+            `${API.baseUrl}/api/proxy?url=${encodeURIComponent(apiUrl)}`,
+            { signal: AbortSignal.timeout(15000) }
+          );
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          // Get text first to check for Cloudflare challenge
+          const text = await response.text();
+
+          // Check if it's a Cloudflare challenge
+          if (this.isCloudflareChallenge(text)) {
+            console.log(`⚠️ Cloudflare challenge detected for ${instance}`);
+            const action = await this.handleCloudflareChallenge(
+              apiUrl,
+              instance
+            );
+
+            if (action === "retry-proxy") {
+              // Retry via proxy (challenge might have been IP-based)
+              console.log("Retrying via proxy...");
+              retries++;
+              continue;
+            } else if (action === "retry-direct") {
+              // Try direct fetch (browser now has cookies from completing challenge)
+              console.log(
+                "Retrying with direct fetch (using browser cookies)..."
+              );
+              try {
+                const directResponse = await fetch(apiUrl, {
+                  credentials: "include",
+                  signal: AbortSignal.timeout(15000),
+                });
+                if (directResponse.ok) {
+                  text = await directResponse.text();
+                  if (!this.isCloudflareChallenge(text)) {
+                    // Success! Continue to parse JSON below
+                    console.log("✅ Direct fetch succeeded after challenge");
+                  } else {
+                    throw new Error("Still getting challenge");
+                  }
+                } else {
+                  throw new Error(`HTTP ${directResponse.status}`);
+                }
+              } catch (directErr) {
+                console.log(
+                  "Direct fetch failed (likely CORS):",
+                  directErr.message
+                );
+                retries++;
+                continue;
+              }
+            } else {
+              break; // Skip to next instance
+            }
+          }
+
+          // Parse JSON
+          let data;
+          try {
+            data = JSON.parse(text);
+          } catch (e) {
+            throw new Error("Invalid JSON response");
+          }
+
+          // Try to get best MP4 format from formatStreams (combined audio+video)
+          const formats = data.formatStreams || [];
+          const mp4Format = formats.find((f) => f.container === "mp4" && f.url);
+
+          if (mp4Format?.url) {
+            console.log(`✅ Got video URL from ${instance}`);
+            return {
+              success: true,
+              videoUrl: mp4Format.url,
+              source: "invidious",
+              instance: instance,
+            };
+          }
+
+          // Fallback to adaptive formats
+          const adaptiveFormats = data.adaptiveFormats || [];
+          const videoFormat = adaptiveFormats.find(
+            (f) => f.container === "mp4" && f.type?.includes("video") && f.url
+          );
+
+          if (videoFormat?.url) {
+            console.log(`✅ Got adaptive video URL from ${instance}`);
+            return {
+              success: true,
+              videoUrl: videoFormat.url,
+              source: "invidious-adaptive",
+              instance: instance,
+            };
+          }
+
+          throw new Error("No suitable format found");
+        } catch (e) {
+          console.log(`Instance ${instance} failed:`, e.message);
+          lastError = e;
+          break; // Move to next instance on error
         }
-
-        const data = await response.json();
-
-        // Try to get best MP4 format from formatStreams (combined audio+video)
-        const formats = data.formatStreams || [];
-        const mp4Format = formats.find((f) => f.container === "mp4" && f.url);
-
-        if (mp4Format?.url) {
-          console.log(`✅ Got video URL from ${instance}`);
-          return {
-            success: true,
-            videoUrl: mp4Format.url,
-            source: "invidious",
-            instance: instance,
-          };
-        }
-
-        // Fallback to adaptive formats
-        const adaptiveFormats = data.adaptiveFormats || [];
-        const videoFormat = adaptiveFormats.find(
-          (f) => f.container === "mp4" && f.type?.includes("video") && f.url
-        );
-
-        if (videoFormat?.url) {
-          console.log(`✅ Got adaptive video URL from ${instance}`);
-          return {
-            success: true,
-            videoUrl: videoFormat.url,
-            source: "invidious-adaptive",
-            instance: instance,
-          };
-        }
-
-        throw new Error("No suitable format found");
-      } catch (e) {
-        console.log(`Instance ${instance} failed:`, e.message);
-        lastError = e;
       }
     }
 
@@ -517,32 +647,15 @@ const ClientYouTube = {
 };
 
 // ============ Full Client-Side Processing ============
-// Downloads video and processes segment entirely in browser
+// Downloads video via server proxy and processes with FFmpeg.wasm in browser
 const ClientProcessor = {
   async processSegment(videoId, startTime, endTime, onProgress) {
-    // Step 1: Get video URL (try client-side first, then server)
+    // Step 1: Get video URL via Invidious (through server proxy)
     onProgress?.({ stage: "Getting video URL...", percent: 5 });
 
-    let urlResult;
-
-    // Try client-side extraction first (Invidious API)
-    try {
-      urlResult = await ClientYouTube.getVideoUrl(videoId);
-    } catch (e) {
-      console.log(
-        "Client-side URL extraction failed, trying server...",
-        e.message
-      );
-      // Fallback to server
-      try {
-        urlResult = await API.getVideoUrl(videoId);
-      } catch (serverError) {
-        throw new Error(`Could not get video URL: ${e.message}`);
-      }
-    }
-
+    const urlResult = await ClientYouTube.getVideoUrl(videoId);
     if (!urlResult?.success) {
-      throw new Error("Could not get video URL");
+      throw new Error("Could not get video URL from Invidious");
     }
 
     // Step 2: Download video in browser

@@ -1799,6 +1799,66 @@ input, textarea, select, button {
   margin-bottom: var(--space-sm);
 }
 
+/* Queue Edit Modal */
+.queue-edit-content {
+  max-width: 500px;
+}
+
+.queue-edit-content .form-group {
+  margin-bottom: var(--space-md);
+}
+
+.queue-edit-content .form-group label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: var(--space-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.queue-edit-content .form-group input,
+.queue-edit-content .form-group textarea,
+.queue-edit-content .form-group select {
+  width: 100%;
+  padding: var(--space-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.queue-edit-content .form-group input:focus,
+.queue-edit-content .form-group textarea:focus,
+.queue-edit-content .form-group select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.queue-edit-content .form-group input[readonly] {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.queue-edit-content .form-row {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.queue-edit-content .form-row .form-group {
+  flex: 1;
+}
+
+.queue-edit-content .form-hint {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: var(--space-xs);
+}
+
 /* ============ Utility Classes ============ */
 .hidden {
   display: none !important;

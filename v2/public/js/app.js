@@ -212,6 +212,22 @@ const DOM = {
   clearQueueBtn: document.getElementById("clear-queue-btn"),
   toggleQueueBtn: document.getElementById("toggle-queue-btn"),
 
+  // Queue Edit Modal
+  queueEditModal: document.getElementById("queue-edit-modal"),
+  queueEditId: document.getElementById("queue-edit-id"),
+  queueEditTitle: document.getElementById("queue-edit-title"),
+  queueEditSegmentName: document.getElementById("queue-edit-segment-name"),
+  queueEditPrivacy: document.getElementById("queue-edit-privacy"),
+  queueEditDescription: document.getElementById("queue-edit-description"),
+  queueEditTags: document.getElementById("queue-edit-tags"),
+  queueEditOverlay: document.getElementById("queue-edit-overlay"),
+  queueEditStart: document.getElementById("queue-edit-start"),
+  queueEditEnd: document.getElementById("queue-edit-end"),
+  queueEditDuration: document.getElementById("queue-edit-duration"),
+  queueEditSaveBtn: document.getElementById("queue-edit-save-btn"),
+  queueEditCancelBtn: document.getElementById("queue-edit-cancel-btn"),
+  closeQueueEditBtn: document.getElementById("close-queue-edit-btn"),
+
   // Toast
   toastContainer: document.getElementById("toast-container"),
 };
@@ -1352,10 +1368,45 @@ function editQueueItem(itemId) {
   const item = queue.find((q) => q.id === itemId);
   if (!item) return;
 
-  const newTitle = prompt("Edit upload title:", item.uploadTitle);
-  if (newTitle !== null && newTitle !== item.uploadTitle) {
-    StorageManager.updateQueueItem(itemId, { uploadTitle: newTitle });
+  // Populate modal with item data
+  DOM.queueEditId.value = itemId;
+  DOM.queueEditTitle.value = item.uploadTitle || "";
+  DOM.queueEditSegmentName.value = item.segmentName || "";
+  DOM.queueEditPrivacy.value = item.uploadPrivacy || "private";
+  DOM.queueEditDescription.value = item.uploadDescription || "";
+  DOM.queueEditTags.value = item.uploadTags || "";
+  DOM.queueEditOverlay.value = item.overlayText || "";
+  DOM.queueEditStart.value = formatTime(item.startTime);
+  DOM.queueEditEnd.value = formatTime(item.endTime);
+  DOM.queueEditDuration.value = formatTime(item.duration);
+
+  // Show modal
+  DOM.queueEditModal.classList.remove("hidden");
+}
+
+function closeQueueEditModal() {
+  DOM.queueEditModal.classList.add("hidden");
+}
+
+function saveQueueItemEdit() {
+  const itemId = DOM.queueEditId.value;
+  if (!itemId) return;
+
+  const updates = {
+    uploadTitle: DOM.queueEditTitle.value,
+    segmentName: DOM.queueEditSegmentName.value,
+    uploadPrivacy: DOM.queueEditPrivacy.value,
+    uploadDescription: DOM.queueEditDescription.value,
+    uploadTags: DOM.queueEditTags.value,
+    overlayText: DOM.queueEditOverlay.value,
+  };
+
+  if (StorageManager.updateQueueItem(itemId, updates)) {
+    showToast("success", "Saved", "Queue item updated");
     renderQueue();
+    closeQueueEditModal();
+  } else {
+    showToast("error", "Error", "Failed to update queue item");
   }
 }
 
@@ -1725,6 +1776,14 @@ async function init() {
     DOM.queueSidebar.classList.toggle("collapsed");
   });
 
+  // Queue edit modal events
+  DOM.closeQueueEditBtn.addEventListener("click", closeQueueEditModal);
+  DOM.queueEditCancelBtn.addEventListener("click", closeQueueEditModal);
+  DOM.queueEditSaveBtn.addEventListener("click", saveQueueItemEdit);
+  DOM.queueEditModal
+    .querySelector(".modal-backdrop")
+    .addEventListener("click", closeQueueEditModal);
+
   // Preview modal events
   DOM.closePreviewBtn.addEventListener("click", closePreview);
   DOM.previewUploadBtn.addEventListener("click", uploadFromPreview);
@@ -1736,10 +1795,16 @@ async function init() {
 
   // Keyboard shortcuts
   document.addEventListener("keydown", (e) => {
-    // Close modal on Escape
-    if (e.key === "Escape" && !DOM.previewModal.classList.contains("hidden")) {
-      closePreview();
-      return;
+    // Close modals on Escape
+    if (e.key === "Escape") {
+      if (!DOM.previewModal.classList.contains("hidden")) {
+        closePreview();
+        return;
+      }
+      if (!DOM.queueEditModal.classList.contains("hidden")) {
+        closeQueueEditModal();
+        return;
+      }
     }
 
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;

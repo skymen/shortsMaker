@@ -8,8 +8,6 @@ const state = {
   authenticated: false,
   selectedChannel: null,
   videos: [],
-  originalVideos: [], // Store original videos when searching
-  isSearching: false, // Track if we're in search mode
   selectedVideo: null,
   seams: [],
   segmentNames: [],
@@ -84,23 +82,11 @@ const API = {
     return res.json();
   },
 
-  async getChannelVideos(channelId, pageToken = null) {
-    let url = `${this.baseUrl}/api/youtube/channel/${channelId}/videos?maxResults=20`;
-    if (pageToken) url += `&pageToken=${pageToken}`;
-    const res = await fetch(url);
+  async getChannelVideos(channelId) {
+    const res = await fetch(
+      `${this.baseUrl}/api/youtube/channel/${channelId}/videos`
+    );
     if (!res.ok) throw new Error("Failed to get videos");
-    return res.json();
-  },
-
-  async searchChannelVideos(channelId, query, pageToken = null) {
-    let url = `${
-      this.baseUrl
-    }/api/youtube/channel/${channelId}/search?query=${encodeURIComponent(
-      query
-    )}&maxResults=20`;
-    if (pageToken) url += `&pageToken=${pageToken}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("Failed to search videos");
     return res.json();
   },
 
@@ -1371,8 +1357,6 @@ async function selectChannel(channelId, channels) {
 function clearChannel() {
   state.selectedChannel = null;
   state.videos = [];
-  state.originalVideos = [];
-  state.isSearching = false;
   state.videoSearchQuery = "";
   StorageManager.clearSelectedChannel();
 
@@ -1384,19 +1368,13 @@ function clearChannel() {
   renderVideoList();
 }
 
-async function loadChannelVideos(pageToken = null) {
+async function loadChannelVideos() {
   if (!state.selectedChannel) return;
 
   try {
-    const data = await API.getChannelVideos(
-      state.selectedChannel.id,
-      pageToken
-    );
+    const data = await API.getChannelVideos(state.selectedChannel.id);
     state.videos = data.videos;
-    state.pagination.nextToken = data.nextPageToken;
-    state.pagination.prevToken = data.prevPageToken;
     renderVideoList();
-    updatePagination();
   } catch (e) {
     showToast("error", "Failed to load videos", e.message);
   }
@@ -1410,7 +1388,12 @@ function renderVideoList() {
 
   let filteredVideos = state.videos;
 
-  // Note: search filtering is now done via API, not locally
+  // Apply search filter
+  if (searchQuery) {
+    filteredVideos = filteredVideos.filter((v) =>
+      v.title.toLowerCase().includes(searchQuery)
+    );
+  }
 
   // Apply status filter
   if (state.currentFilter === "finished") {
@@ -1504,10 +1487,8 @@ function renderVideoList() {
 }
 
 function updatePagination() {
-  const hasPages = state.pagination.nextToken || state.pagination.prevToken;
-  DOM.pagination.classList.toggle("hidden", !hasPages);
-  DOM.prevPage.disabled = !state.pagination.prevToken;
-  DOM.nextPage.disabled = !state.pagination.nextToken;
+  // All videos are loaded at once, no pagination needed
+  DOM.pagination.classList.add("hidden");
 }
 
 // ============ Video Editor Functions ============
@@ -3292,45 +3273,9 @@ function setFilter(filter) {
 }
 
 // ============ Video Search ============
-async function handleVideoSearch() {
-  const query = DOM.videoSearch.value.trim();
-  state.videoSearchQuery = query;
-
-  if (!state.selectedChannel) {
-    renderVideoList();
-    return;
-  }
-
-  // If search is cleared, restore original videos
-  if (!query) {
-    if (state.isSearching) {
-      state.videos = state.originalVideos;
-      state.isSearching = false;
-      state.pagination.nextToken = null;
-      state.pagination.prevToken = null;
-      await loadChannelVideos(); // Reload to get proper pagination
-    }
-    renderVideoList();
-    return;
-  }
-
-  // Save original videos if not already searching
-  if (!state.isSearching) {
-    state.originalVideos = [...state.videos];
-    state.isSearching = true;
-  }
-
-  try {
-    const data = await API.searchChannelVideos(state.selectedChannel.id, query);
-    state.videos = data.videos;
-    state.pagination.nextToken = data.nextPageToken;
-    state.pagination.prevToken = data.prevPageToken;
-    renderVideoList();
-    updatePagination();
-  } catch (e) {
-    console.error("Search error:", e);
-    showToast("error", "Search failed", e.message);
-  }
+function handleVideoSearch() {
+  state.videoSearchQuery = DOM.videoSearch.value.trim();
+  renderVideoList();
 }
 
 // ============ Initialize ============
@@ -3437,13 +3382,6 @@ async function init() {
   DOM.filterTabs.forEach((tab) => {
     tab.addEventListener("click", () => setFilter(tab.dataset.filter));
   });
-
-  DOM.prevPage.addEventListener("click", () =>
-    loadChannelVideos(state.pagination.prevToken)
-  );
-  DOM.nextPage.addEventListener("click", () =>
-    loadChannelVideos(state.pagination.nextToken)
-  );
 
   DOM.playPause.addEventListener("click", togglePlayPause);
   DOM.seekBack.addEventListener("click", () => seekRelative(-10));

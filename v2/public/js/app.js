@@ -209,17 +209,30 @@ const API = {
     return res.json();
   },
 
-  async uploadSegment(segmentPath, title, description, tags, privacy) {
+  async uploadSegment(
+    segmentPath,
+    title,
+    description,
+    tags,
+    privacy,
+    scheduledTime = null
+  ) {
+    const body = {
+      segmentPath,
+      title,
+      description,
+      tags,
+      privacyStatus: privacy,
+    };
+
+    if (scheduledTime) {
+      body.scheduledTime = scheduledTime;
+    }
+
     const res = await fetch(`${this.baseUrl}/api/youtube/upload-segment`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        segmentPath,
-        title,
-        description,
-        tags,
-        privacyStatus: privacy,
-      }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error("Failed to upload");
     return res.json();
@@ -1102,6 +1115,33 @@ const DOM = {
   queueEditSaveBtn: document.getElementById("queue-edit-save-btn"),
   queueEditCancelBtn: document.getElementById("queue-edit-cancel-btn"),
   closeQueueEditBtn: document.getElementById("close-queue-edit-btn"),
+
+  // Process Settings Modal
+  processSettingsModal: document.getElementById("process-settings-modal"),
+  processQueueCount: document.getElementById("process-queue-count"),
+  processTitleTemplate: document.getElementById("process-title-template"),
+  processVisibility: document.getElementById("process-visibility"),
+  scheduleSettings: document.getElementById("schedule-settings"),
+  scheduleMode: document.getElementById("schedule-mode"),
+  scheduleStartDate: document.getElementById("schedule-start-date"),
+  scheduleStartTime: document.getElementById("schedule-start-time"),
+  // Linear mode
+  linearSettings: document.getElementById("linear-settings"),
+  scheduleInterval: document.getElementById("schedule-interval"),
+  // Course mode
+  courseSettings: document.getElementById("course-settings"),
+  coursePattern: document.getElementById("course-pattern"),
+  courseVideoInterval: document.getElementById("course-video-interval"),
+  // Custom mode
+  customSettings: document.getElementById("custom-settings"),
+  customSortFunction: document.getElementById("custom-sort-function"),
+  processDescription: document.getElementById("process-description"),
+  processTags: document.getElementById("process-tags"),
+  closeProcessSettingsBtn: document.getElementById(
+    "close-process-settings-btn"
+  ),
+  cancelProcessBtn: document.getElementById("cancel-process-btn"),
+  startProcessBtn: document.getElementById("start-process-btn"),
 
   // Toast
   toastContainer: document.getElementById("toast-container"),
@@ -2458,6 +2498,308 @@ function closeServerQueueModal() {
   DOM.serverQueueModal.classList.add("hidden");
 }
 
+// ============ Process Settings Modal ============
+function openProcessSettingsModal() {
+  const queue = StorageManager.getQueue();
+  const pendingItems = queue.filter((item) => item.status === "pending");
+
+  if (pendingItems.length === 0) {
+    showToast(
+      "info",
+      t("nothingToProcess") || "Nothing to process",
+      t("noPendingItems") || "No pending items in queue"
+    );
+    return;
+  }
+
+  // Update count
+  DOM.processQueueCount.textContent =
+    t("itemsToProcess", { count: pendingItems.length }) ||
+    `${pendingItems.length} items to process`;
+
+  // Set default date to tomorrow
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  DOM.scheduleStartDate.value = tomorrow.toISOString().split("T")[0];
+
+  // Reset visibility state
+  DOM.processVisibility.value = "private";
+  DOM.scheduleSettings.classList.add("hidden");
+
+  // Reset schedule mode
+  DOM.scheduleMode.value = "linear";
+  updateScheduleModeUI();
+
+  // Set default custom function
+  DOM.customSortFunction.value = getDefaultCustomFunction();
+
+  DOM.processSettingsModal.classList.remove("hidden");
+}
+
+function updateScheduleModeUI() {
+  const mode = DOM.scheduleMode.value;
+  DOM.linearSettings.classList.toggle("hidden", mode !== "linear");
+  DOM.courseSettings.classList.toggle("hidden", mode !== "course");
+  DOM.customSettings.classList.toggle("hidden", mode !== "custom");
+}
+
+function closeProcessSettingsModal() {
+  DOM.processSettingsModal.classList.add("hidden");
+}
+
+function getDefaultCustomFunction() {
+  return `// Custom schedule function
+// Return a Map of itemId → scheduled Date
+// Available: items (array), startDate (Date object)
+function getSchedule(items, startDate) {
+  const schedule = new Map();
+  let currentTime = new Date(startDate);
+  
+  // Sort items by upload title first
+  items.sort((a, b) => (a.uploadTitle || "").localeCompare(b.uploadTitle || ""));
+  
+  // Schedule each item 5 minutes apart
+  items.forEach((item, index) => {
+    schedule.set(item.id, new Date(currentTime));
+    currentTime.setMinutes(currentTime.getMinutes() + 5);
+  });
+  
+  return schedule;
+}`;
+}
+
+// Course-based scheduling logic (from v1)
+function calculateCourseSchedule(
+  items,
+  startDate,
+  pattern,
+  videoIntervalMinutes
+) {
+  const regex = new RegExp(pattern, "i");
+  const scheduledTimes = new Map();
+
+  // Sort items by pattern
+  const sortedItems = [...items].sort((a, b) => {
+    const aMatch = (a.segmentName || a.uploadTitle || "").match(regex);
+    const bMatch = (b.segmentName || b.uploadTitle || "").match(regex);
+
+    if (aMatch && bMatch) {
+      // Compare chapter, lesson, part in order
+      for (let i = 1; i < Math.min(aMatch.length, bMatch.length); i++) {
+        const aVal = parseInt(aMatch[i]) || 0;
+        const bVal = parseInt(bMatch[i]) || 0;
+        if (aVal !== bVal) return aVal - bVal;
+      }
+    }
+    return (a.uploadTitle || "").localeCompare(b.uploadTitle || "");
+  });
+
+  // Group items hierarchically: lessons -> parts -> videos
+  const lessons = [];
+  let currentLesson = null;
+  let currentLessonNum = -1;
+  let currentPart = null;
+  let currentPartNum = -1;
+
+  for (const item of sortedItems) {
+    const match = (item.segmentName || item.uploadTitle || "").match(regex);
+    if (match && match.length >= 3) {
+      const lessonNum = parseInt(match[1]) || 0; // Chapter/Lesson number
+      const partNum = parseInt(match[2]) || 0; // Lesson/Part number
+
+      if (lessonNum !== currentLessonNum) {
+        // New lesson
+        if (currentPart && currentPart.length > 0) {
+          currentLesson.push(currentPart);
+        }
+        if (currentLesson && currentLesson.length > 0) {
+          lessons.push(currentLesson);
+        }
+        currentLesson = [];
+        currentLessonNum = lessonNum;
+        currentPart = [];
+        currentPartNum = partNum;
+      } else if (partNum !== currentPartNum) {
+        // New part within same lesson
+        if (currentPart && currentPart.length > 0) {
+          currentLesson.push(currentPart);
+        }
+        currentPart = [];
+        currentPartNum = partNum;
+      }
+      currentPart.push(item);
+    } else {
+      // No match - add to current part or create new one
+      if (!currentPart) currentPart = [];
+      if (!currentLesson) currentLesson = [];
+      currentPart.push(item);
+    }
+  }
+
+  // Don't forget the last groups
+  if (currentPart && currentPart.length > 0) {
+    if (!currentLesson) currentLesson = [];
+    currentLesson.push(currentPart);
+  }
+  if (currentLesson && currentLesson.length > 0) {
+    lessons.push(currentLesson);
+  }
+
+  // Find first Monday on or after start date
+  const firstMonday = new Date(startDate);
+  const dayOfWeek = firstMonday.getDay();
+  const daysUntilMonday =
+    dayOfWeek === 0 ? 1 : dayOfWeek === 1 ? 0 : 8 - dayOfWeek;
+  firstMonday.setDate(firstMonday.getDate() + daysUntilMonday);
+
+  // Schedule videos
+  lessons.forEach((lesson, lessonIndex) => {
+    lesson.forEach((part, partIndex) => {
+      part.forEach((item, videoIndex) => {
+        const scheduleTime = new Date(firstMonday);
+
+        // Add weeks for each lesson
+        scheduleTime.setDate(scheduleTime.getDate() + lessonIndex * 7);
+
+        // Spread parts across weekdays
+        // 5 parts: Mon, Tue, Wed, Thu, Fri (0, 1, 2, 3, 4 days)
+        // 4 parts: Mon, Tue, Thu, Fri (skip Wednesday)
+        if (lesson.length === 5) {
+          scheduleTime.setDate(scheduleTime.getDate() + partIndex);
+        } else if (lesson.length === 4) {
+          if (partIndex < 2) {
+            scheduleTime.setDate(scheduleTime.getDate() + partIndex);
+          } else {
+            scheduleTime.setDate(scheduleTime.getDate() + partIndex + 1); // Skip Wed
+          }
+        } else {
+          // Other counts: just spread evenly
+          scheduleTime.setDate(scheduleTime.getDate() + partIndex);
+        }
+
+        // Add minutes for each video in the part
+        scheduleTime.setMinutes(
+          scheduleTime.getMinutes() + videoIndex * videoIntervalMinutes
+        );
+
+        scheduledTimes.set(item.id, scheduleTime);
+      });
+    });
+  });
+
+  return { scheduledTimes, sortedItems };
+}
+
+function applyProcessSettings() {
+  const queue = StorageManager.getQueue();
+  let pendingItems = queue.filter((item) => item.status === "pending");
+
+  if (pendingItems.length === 0) {
+    closeProcessSettingsModal();
+    return;
+  }
+
+  const visibility = DOM.processVisibility.value;
+  const description = DOM.processDescription.value;
+  const tags = DOM.processTags.value;
+  const titleTemplate = DOM.processTitleTemplate.value;
+
+  // Calculate scheduled times if scheduled
+  let scheduledTimes = new Map();
+  if (visibility === "scheduled") {
+    const startDate = new Date(DOM.scheduleStartDate.value);
+    const startTime = DOM.scheduleStartTime.value.split(":");
+    startDate.setHours(parseInt(startTime[0]), parseInt(startTime[1]), 0, 0);
+
+    const scheduleMode = DOM.scheduleMode.value;
+
+    if (scheduleMode === "linear") {
+      // Linear scheduling: fixed interval
+      const intervalMinutes = parseInt(DOM.scheduleInterval.value) || 5;
+      pendingItems.forEach((item, index) => {
+        const scheduleTime = new Date(startDate);
+        scheduleTime.setMinutes(
+          scheduleTime.getMinutes() + index * intervalMinutes
+        );
+        scheduledTimes.set(item.id, scheduleTime);
+      });
+    } else if (scheduleMode === "course") {
+      // Course-based scheduling
+      const pattern =
+        DOM.coursePattern.value ||
+        "Chapitre (\\d+).*?Leçon (\\d+).*?Partie (\\d+)";
+      const videoInterval = parseInt(DOM.courseVideoInterval.value) || 5;
+
+      try {
+        const result = calculateCourseSchedule(
+          pendingItems,
+          startDate,
+          pattern,
+          videoInterval
+        );
+        scheduledTimes = result.scheduledTimes;
+        pendingItems = result.sortedItems; // Use sorted order
+      } catch (e) {
+        console.error("Course schedule error:", e);
+        showToast(
+          "error",
+          "Schedule Error",
+          "Failed to calculate course schedule: " + e.message
+        );
+        return;
+      }
+    } else if (scheduleMode === "custom") {
+      // Custom function
+      try {
+        const customCode = DOM.customSortFunction.value;
+        const scheduleFn = new Function(
+          "items",
+          "startDate",
+          customCode + "\nreturn getSchedule(items, startDate);"
+        );
+        scheduledTimes = scheduleFn(pendingItems, startDate);
+      } catch (e) {
+        console.error("Custom schedule function error:", e);
+        showToast(
+          "error",
+          "Schedule Error",
+          "Custom function failed: " + e.message
+        );
+        return;
+      }
+    }
+  }
+
+  // Update all pending items with the new settings
+  pendingItems.forEach((item, index) => {
+    // Generate title from template
+    const title = titleTemplate
+      .replace("{title}", item.videoTitle || "")
+      .replace("{part}", item.segmentName || `Part ${item.segmentIndex + 1}`)
+      .replace("{text}", item.textOverlay || "")
+      .replace("{n}", String(item.segmentIndex + 1));
+
+    const updates = {
+      uploadTitle: title,
+      uploadDescription: description,
+      uploadTags: tags,
+      uploadPrivacy: visibility === "scheduled" ? "private" : visibility,
+    };
+
+    if (visibility === "scheduled" && scheduledTimes.has(item.id)) {
+      updates.scheduledTime = scheduledTimes.get(item.id).toISOString();
+    }
+
+    StorageManager.updateQueueItem(item.id, updates);
+  });
+
+  closeProcessSettingsModal();
+  renderQueue();
+
+  // Start actual processing
+  executeProcessQueue(pendingItems);
+}
+
 async function loadServerQueue() {
   DOM.serverQueueStatus.textContent = "Loading...";
   DOM.serverQueueList.innerHTML =
@@ -2588,10 +2930,10 @@ async function importServerQueueToLocal() {
 }
 
 async function processServerQueue() {
-  // Import to local first, then process
+  // Import to local first, then open process settings
   await importServerQueueToLocal();
   closeServerQueueModal();
-  processQueue();
+  openProcessSettingsModal();
 }
 
 async function previewServerQueueItem(itemId) {
@@ -2663,9 +3005,15 @@ async function removeProcessedItem(itemId) {
   }
 }
 
-async function processQueue() {
+function processQueue() {
+  // Open settings modal instead of processing directly
+  openProcessSettingsModal();
+}
+
+async function executeProcessQueue(sortedItems = null) {
   const queue = StorageManager.getQueue();
-  const pendingItems = queue.filter((item) => item.status === "pending");
+  const pendingItems =
+    sortedItems || queue.filter((item) => item.status === "pending");
 
   if (pendingItems.length === 0) {
     showToast("info", "Nothing to process", "No pending items in queue");
@@ -2760,7 +3108,8 @@ async function processQueue() {
         currentItem.uploadTitle,
         currentItem.uploadDescription,
         currentItem.uploadTags,
-        currentItem.uploadPrivacy
+        currentItem.uploadPrivacy,
+        currentItem.scheduledTime || null
       );
 
       if (uploadResult.success) {
@@ -3231,6 +3580,29 @@ async function init() {
   DOM.queueEditModal
     .querySelector(".modal-backdrop")
     .addEventListener("click", closeQueueEditModal);
+
+  // Process settings modal events
+  DOM.closeProcessSettingsBtn.addEventListener(
+    "click",
+    closeProcessSettingsModal
+  );
+  DOM.cancelProcessBtn.addEventListener("click", closeProcessSettingsModal);
+  DOM.startProcessBtn.addEventListener("click", applyProcessSettings);
+  DOM.processSettingsModal
+    .querySelector(".modal-backdrop")
+    .addEventListener("click", closeProcessSettingsModal);
+
+  // Visibility change handler for schedule settings
+  DOM.processVisibility.addEventListener("change", (e) => {
+    if (e.target.value === "scheduled") {
+      DOM.scheduleSettings.classList.remove("hidden");
+    } else {
+      DOM.scheduleSettings.classList.add("hidden");
+    }
+  });
+
+  // Schedule mode change handler
+  DOM.scheduleMode.addEventListener("change", updateScheduleModeUI);
 
   // Preview modal events
   DOM.closePreviewBtn.addEventListener("click", closePreview);

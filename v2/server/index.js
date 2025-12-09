@@ -1386,6 +1386,7 @@ app.post("/api/youtube/upload-segment", async (req, res) => {
     description,
     tags,
     privacyStatus = "private",
+    scheduledTime = null,
   } = req.body;
   const fullPath = path.join(__dirname, "..", segmentPath.replace(/^\//, ""));
 
@@ -1396,6 +1397,19 @@ app.post("/api/youtube/upload-segment", async (req, res) => {
   try {
     oauth2Client.setCredentials(userTokens);
 
+    // Build status object
+    const status = {
+      selfDeclaredMadeForKids: false,
+    };
+
+    // If scheduled, set privacyStatus to "private" and add publishAt
+    if (scheduledTime) {
+      status.privacyStatus = "private";
+      status.publishAt = new Date(scheduledTime).toISOString();
+    } else {
+      status.privacyStatus = privacyStatus;
+    }
+
     const response = await youtube.videos.insert({
       part: "snippet,status",
       requestBody: {
@@ -1405,10 +1419,7 @@ app.post("/api/youtube/upload-segment", async (req, res) => {
           tags: tags ? tags.split(",").map((t) => t.trim()) : [],
           categoryId: "22",
         },
-        status: {
-          privacyStatus,
-          selfDeclaredMadeForKids: false,
-        },
+        status,
       },
       media: {
         body: fs.createReadStream(fullPath),
@@ -1419,6 +1430,8 @@ app.post("/api/youtube/upload-segment", async (req, res) => {
       success: true,
       videoId: response.data.id,
       url: `https://youtube.com/watch?v=${response.data.id}`,
+      scheduled: scheduledTime ? true : false,
+      publishAt: scheduledTime || null,
     });
   } catch (error) {
     console.error("Upload error:", error);

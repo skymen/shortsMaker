@@ -896,6 +896,214 @@
           </div>
         </div>
       </div>
+
+      <!-- Process Settings Modal -->
+      <div id="process-settings-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content process-settings-content">
+          <div class="modal-header">
+            <h3>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                width="20"
+                height="20"
+              >
+                <circle cx="12" cy="12" r="3"></circle>
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                ></path>
+              </svg>
+              <span data-i18n="processSettings">Process Settings</span>
+            </h3>
+            <button
+              id="close-process-settings-btn"
+              class="btn-icon"
+              title="Close"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="process-settings-info">
+              <span id="process-queue-count">0 items to process</span>
+            </div>
+            <div class="form-group">
+              <label data-i18n="titleTemplate">Title Template</label>
+              <input
+                type="text"
+                id="process-title-template"
+                placeholder="{title} - {part} {text}"
+                value="{title} - {part} {text}"
+              />
+              <small class="template-hint"
+                >{title} = Video title, {part} = Part name, {text} = Overlay
+                text, {n} = Part number</small
+              >
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label data-i18n="visibility">Visibility</label>
+                <select id="process-visibility">
+                  <option value="private" data-i18n="private">Private</option>
+                  <option value="unlisted" data-i18n="unlisted">
+                    Unlisted
+                  </option>
+                  <option value="public" data-i18n="public">Public</option>
+                  <option value="scheduled" data-i18n="scheduled">
+                    Scheduled
+                  </option>
+                </select>
+              </div>
+            </div>
+            <div id="schedule-settings" class="schedule-settings hidden">
+              <div class="form-group">
+                <label data-i18n="scheduleMode">Schedule Mode</label>
+                <select id="schedule-mode">
+                  <option value="linear" data-i18n="linearMode">
+                    Linear (fixed interval)
+                  </option>
+                  <option value="course" data-i18n="courseMode">
+                    Course (weekly lessons)
+                  </option>
+                  <option value="custom" data-i18n="customMode">
+                    Custom function
+                  </option>
+                </select>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label data-i18n="startDate">Start Date</label>
+                  <input type="date" id="schedule-start-date" />
+                </div>
+                <div class="form-group">
+                  <label data-i18n="startTime">Start Time</label>
+                  <input type="time" id="schedule-start-time" value="15:00" />
+                </div>
+              </div>
+              <!-- Linear mode settings -->
+              <div id="linear-settings" class="schedule-mode-settings">
+                <div class="form-group">
+                  <label data-i18n="intervalMinutes">Interval (minutes)</label>
+                  <input
+                    type="number"
+                    id="schedule-interval"
+                    value="5"
+                    min="1"
+                    max="1440"
+                  />
+                  <small class="form-hint" data-i18n="intervalHint"
+                    >Time between each video upload</small
+                  >
+                </div>
+              </div>
+              <!-- Course mode settings -->
+              <div id="course-settings" class="schedule-mode-settings hidden">
+                <div class="form-group">
+                  <label data-i18n="namingPattern">Naming Pattern</label>
+                  <input
+                    type="text"
+                    id="course-pattern"
+                    value="Chapitre (\d+).*?Leçon (\d+).*?Partie (\d+)"
+                    placeholder="Chapitre (\d+).*?Leçon (\d+).*?Partie (\d+)"
+                  />
+                  <small class="form-hint" data-i18n="patternHint"
+                    >Regex pattern to extract Chapter, Lesson, Part numbers from
+                    segment names</small
+                  >
+                </div>
+                <div class="form-group">
+                  <label data-i18n="videoInterval"
+                    >Video Interval (minutes)</label
+                  >
+                  <input
+                    type="number"
+                    id="course-video-interval"
+                    value="5"
+                    min="1"
+                    max="60"
+                  />
+                  <small class="form-hint" data-i18n="videoIntervalHint"
+                    >Time between videos in the same part</small
+                  >
+                </div>
+                <small class="form-hint course-schedule-info">
+                  <strong data-i18n="courseScheduleInfo"
+                    >Schedule logic:</strong
+                  >
+                  <span data-i18n="courseScheduleDesc"
+                    >Each lesson = 1 week. Parts spread across weekdays (5 parts
+                    = Mon-Fri, 4 parts = skip Wed).</span
+                  >
+                </small>
+              </div>
+              <!-- Custom mode settings -->
+              <div id="custom-settings" class="schedule-mode-settings hidden">
+                <div class="form-group">
+                  <label data-i18n="customScheduleFunction"
+                    >Custom Schedule Function</label
+                  >
+                  <textarea
+                    id="custom-sort-function"
+                    rows="12"
+                    placeholder="// Define getSchedule(items, startDate) function..."
+                  ></textarea>
+                  <small class="form-hint" data-i18n="customScheduleHint"
+                    >Define getSchedule(items, startDate) that returns a Map of
+                    itemId → Date</small
+                  >
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label data-i18n="description">Description</label>
+              <textarea
+                id="process-description"
+                rows="2"
+                data-i18n-placeholder="descriptionPlaceholder"
+                placeholder="Description for your shorts..."
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label data-i18n="tags">Tags</label>
+              <input
+                type="text"
+                id="process-tags"
+                data-i18n-placeholder="tagsPlaceholder"
+                placeholder="tag1, tag2, tag3"
+              />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button id="cancel-process-btn" class="btn">
+              <span data-i18n="cancel">Cancel</span>
+            </button>
+            <button id="start-process-btn" class="btn btn-primary">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                width="16"
+                height="16"
+              >
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              <span data-i18n="startProcessing">Start Processing</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- YouTube IFrame API -->

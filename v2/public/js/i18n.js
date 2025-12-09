@@ -80,6 +80,33 @@ const i18n = {
       addAllToQueue: "Add All to Queue",
       noSegmentsToUpload: "No segments to upload",
 
+      // Process Settings Modal
+      processSettings: "Process Settings",
+      visibility: "Visibility",
+      scheduled: "Scheduled",
+      startDate: "Start Date",
+      startTime: "Start Time",
+      scheduleMode: "Schedule Mode",
+      linearMode: "Linear (fixed interval)",
+      courseMode: "Course (weekly lessons)",
+      customMode: "Custom function",
+      intervalMinutes: "Interval (minutes)",
+      intervalHint: "Time between each video upload",
+      namingPattern: "Naming Pattern",
+      patternHint:
+        "Regex pattern to extract Chapter, Lesson, Part numbers from segment names",
+      videoInterval: "Video Interval (minutes)",
+      videoIntervalHint: "Time between videos in the same part",
+      courseScheduleInfo: "Schedule logic:",
+      courseScheduleDesc:
+        "Each lesson = 1 week. Parts spread across weekdays (5 parts = Mon-Fri, 4 parts = skip Wed).",
+      customScheduleFunction: "Custom Schedule Function",
+      customScheduleHint:
+        "Define getSchedule(items, startDate) that returns a Map of itemId → Date",
+      cancel: "Cancel",
+      startProcessing: "Start Processing",
+      itemsToProcess: "{count} items to process",
+
       // YouTube Cookies
       youtubeCookies: "YouTube Cookies",
       cookiesUploaded: "Uploaded",
@@ -268,6 +295,33 @@ const i18n = {
         "Utilise votre appareil pour le traitement vidéo au lieu du serveur. Plus rapide pour les serveurs lents.",
       addAllToQueue: "Tout ajouter à la file",
       noSegmentsToUpload: "Aucun segment à téléverser",
+
+      // Process Settings Modal
+      processSettings: "Paramètres de traitement",
+      visibility: "Visibilité",
+      scheduled: "Programmé",
+      startDate: "Date de début",
+      startTime: "Heure de début",
+      scheduleMode: "Mode de planification",
+      linearMode: "Linéaire (intervalle fixe)",
+      courseMode: "Cours (leçons hebdomadaires)",
+      customMode: "Fonction personnalisée",
+      intervalMinutes: "Intervalle (minutes)",
+      intervalHint: "Temps entre chaque téléversement de vidéo",
+      namingPattern: "Modèle de nommage",
+      patternHint:
+        "Regex pour extraire les numéros de Chapitre, Leçon, Partie des noms de segments",
+      videoInterval: "Intervalle vidéo (minutes)",
+      videoIntervalHint: "Temps entre les vidéos d'une même partie",
+      courseScheduleInfo: "Logique de planification :",
+      courseScheduleDesc:
+        "Chaque leçon = 1 semaine. Parties réparties sur les jours de la semaine (5 parties = Lun-Ven, 4 parties = saute Mer).",
+      customScheduleFunction: "Fonction de planification personnalisée",
+      customScheduleHint:
+        "Définir getSchedule(items, startDate) qui retourne une Map de itemId → Date",
+      cancel: "Annuler",
+      startProcessing: "Démarrer le traitement",
+      itemsToProcess: "{count} éléments à traiter",
 
       // YouTube Cookies
       youtubeCookies: "Cookies YouTube",

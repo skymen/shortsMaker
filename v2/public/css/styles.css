@@ -2046,6 +2046,62 @@ input, textarea, select, button {
   width: 95%;
 }
 
+/* Process Settings Modal */
+.process-settings-content {
+  max-width: 550px;
+  width: 95%;
+  overflow: auto;
+}
+
+.process-settings-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.schedule-settings {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: var(--bg-tertiary);
+}
+
+.schedule-settings.hidden {
+  display: none;
+}
+
+.schedule-mode-settings {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.schedule-mode-settings.hidden {
+  display: none;
+}
+
+.schedule-mode-settings textarea {
+  font-family: monospace;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.course-schedule-info {
+  display: block;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  line-height: 1.5;
+}
+
 .server-queue-info {
   display: flex;
   align-items: center;

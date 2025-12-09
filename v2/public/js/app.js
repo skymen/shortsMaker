@@ -1769,7 +1769,7 @@ function renderSegmentsList() {
       }
       <input type="text" 
              value="${state.segmentNames[i] || `Part ${i + 1}`}" 
-             placeholder="Segment name..."
+             placeholder="${t("segmentName")}"
              data-index="${i}" 
              data-field="name">
       <div class="segment-card-times">
@@ -1779,26 +1779,30 @@ function renderSegmentsList() {
       </div>
       <input type="text" 
              value="${state.textOverlays[i] || ""}" 
-             placeholder="Add animated text..."
+             placeholder="${t("addAnimatedText")}"
              data-index="${i}" 
              data-field="overlay">
       <div class="segment-card-actions">
-        <button class="btn btn-small" onclick="seekTo(${start})" title="Go to start">
+        <button class="btn btn-small" onclick="seekTo(${start})" title="${t(
+      "goToStart"
+    )}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
             <polygon points="5 3 19 12 5 21 5 3"></polygon>
           </svg>
-          Play
+          ${t("play")}
         </button>
-        <button class="btn btn-small btn-primary" onclick="previewSegment(${i})" title="Preview">
+        <button class="btn btn-small btn-primary" onclick="previewSegment(${i})" title="${t(
+      "preview"
+    )}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
             <circle cx="12" cy="12" r="3"></circle>
           </svg>
-          Preview
+          ${t("preview")}
         </button>
-        <button class="btn btn-small" onclick="deleteSeam(${
-          i + 1
-        })" title="Delete" style="background: var(--error);">
+        <button class="btn btn-small" onclick="deleteSeam(${i + 1})" title="${t(
+      "delete"
+    )}" style="background: var(--error);">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -1850,19 +1854,25 @@ function renderUploadList() {
         <div class="segment-duration">${formatTime(duration)}</div>
       </div>
       <div class="segment-upload-actions">
-        <button class="btn btn-small btn-secondary local-only" onclick="previewSegment(${i})" title="Preview">
+        <button class="btn btn-small btn-secondary local-only" onclick="previewSegment(${i})" title="${t(
+      "preview"
+    )}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
             <polygon points="5 3 19 12 5 21 5 3"></polygon>
           </svg>
         </button>
-        <button class="btn btn-small btn-accent" onclick="addToQueue(${i})" title="Add to queue">
+        <button class="btn btn-small btn-accent" onclick="addToQueue(${i})" title="${t(
+      "queue"
+    )}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          Queue
+          ${t("queue")}
         </button>
-        <button class="btn btn-small btn-primary local-only" onclick="uploadSegment(${i})" title="Upload directly">Upload</button>
+        <button class="btn btn-small btn-primary local-only" onclick="uploadSegment(${i})" title="${t(
+      "upload"
+    )}">${t("upload")}</button>
       </div>
     `;
 
@@ -2027,7 +2037,7 @@ function updateMarkFinishedButton() {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
         <polyline points="20 6 9 17 4 12"></polyline>
       </svg>
-      Done
+      ${t("done")}
     `;
     DOM.markFinishedBtn.classList.add("btn-success");
     DOM.markFinishedBtn.style.background = "";
@@ -2116,17 +2126,19 @@ function renderQueue() {
       <div class="queue-item-actions">
         <button class="btn btn-small local-only" onclick="previewQueueItem('${
           item.id
-        }')" ${item.status !== "pending" ? "disabled" : ""}>Preview</button>
+        }')" ${item.status !== "pending" ? "disabled" : ""}>${t(
+        "preview"
+      )}</button>
         <button class="btn btn-small" onclick="editQueueItem('${item.id}')" ${
         item.status !== "pending" ? "disabled" : ""
-      }>Edit</button>
+      }>${t("edit")}</button>
         <button class="btn btn-small" style="background: var(--error);" onclick="removeFromQueue('${
           item.id
         }')" ${
         item.status === "processing" || item.status === "uploading"
           ? "disabled"
           : ""
-      }>Remove</button>
+      }>${t("remove")}</button>
       </div>
     </div>
   `
@@ -2931,6 +2943,13 @@ async function init() {
     DOM.languageSelect.value = i18n.getLanguage();
     DOM.languageSelect.addEventListener("change", (e) => {
       i18n.setLanguage(e.target.value);
+    });
+
+    // Re-render dynamic content when language changes
+    document.addEventListener("languageChanged", () => {
+      renderQueue();
+      renderUploadList();
+      renderSegmentsList();
     });
   }
 

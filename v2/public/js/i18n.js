@@ -31,7 +31,9 @@ const i18n = {
       // Editor
       selectVideo: "Select a video to start editing",
       clickVideoToEdit: "Click on a video from the sidebar to load it here",
+      play: "Play",
       playPause: "Play/Pause",
+      goToStart: "Go to start",
       seekBack: "Seek -10s",
       seekForward: "Seek +10s",
       addSeam: "Add Seam",
@@ -53,6 +55,12 @@ const i18n = {
       // Segment names
       segmentName: "Segment name",
       overlayText: "Overlay text (optional)",
+      addAnimatedText: "Add animated text...",
+      overlayTitle: "Overlay Title",
+      overlayTitlePlaceholder: "Video title for overlays...",
+      done: "Done",
+      edit: "Edit",
+      remove: "Remove",
 
       // Upload Panel
       uploadSettings: "Upload Settings",
@@ -212,7 +220,9 @@ const i18n = {
       selectVideo: "Sélectionnez une vidéo pour commencer l'édition",
       clickVideoToEdit:
         "Cliquez sur une vidéo dans la barre latérale pour la charger ici",
+      play: "Lire",
       playPause: "Lecture/Pause",
+      goToStart: "Aller au début",
       seekBack: "Reculer -10s",
       seekForward: "Avancer +10s",
       addSeam: "Ajouter un repère",
@@ -234,6 +244,12 @@ const i18n = {
       // Segment names
       segmentName: "Nom du segment",
       overlayText: "Texte superposé (optionnel)",
+      addAnimatedText: "Ajouter un texte animé...",
+      overlayTitle: "Titre de superposition",
+      overlayTitlePlaceholder: "Titre vidéo pour les superpositions...",
+      done: "Terminé",
+      edit: "Modifier",
+      remove: "Retirer",
 
       // Upload Panel
       uploadSettings: "Paramètres de téléversement",

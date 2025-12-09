@@ -236,6 +236,7 @@
                         id="play-pause"
                         class="btn-icon btn-large"
                         title="Play/Pause"
+                        data-i18n-title="playPause"
                       >
                         <svg
                           class="play-icon"
@@ -319,7 +320,7 @@
                           <polyline points="17 21 17 13 7 13 7 21"></polyline>
                           <polyline points="7 3 7 8 15 8"></polyline>
                         </svg>
-                        Save
+                        <span data-i18n="save">Save</span>
                       </button>
                       <button
                         id="mark-finished-btn"
@@ -335,7 +336,7 @@
                         >
                           <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
-                        Done
+                        <span data-i18n="done">Done</span>
                       </button>
                       <button
                         id="ignore-video-btn"
@@ -363,10 +364,13 @@
                   </div>
                   <!-- Video Title Override -->
                   <div class="video-title-input">
-                    <label for="video-title-override">Overlay Title</label>
+                    <label for="video-title-override" data-i18n="overlayTitle"
+                      >Overlay Title</label
+                    >
                     <input
                       type="text"
                       id="video-title-override"
+                      data-i18n-placeholder="overlayTitlePlaceholder"
                       placeholder="Video title for overlays..."
                     />
                   </div>
@@ -510,7 +514,7 @@
                       <line x1="12" y1="5" x2="12" y2="19"></line>
                       <line x1="5" y1="12" x2="19" y2="12"></line>
                     </svg>
-                    Add All to Queue
+                    <span data-i18n="addAllToQueue">Add All to Queue</span>
                   </button>
                 </div>
                 <div

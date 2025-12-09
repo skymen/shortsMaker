@@ -1062,6 +1062,10 @@ const DOM = {
   segmentsUploadList: document.getElementById("segments-upload-list"),
   addAllToQueueBtn: document.getElementById("add-all-to-queue-btn"),
 
+  // Sidebars
+  leftSidebar: document.getElementById("left-sidebar"),
+  toggleSidebarBtn: document.getElementById("toggle-sidebar-btn"),
+
   // Queue
   queueSidebar: document.getElementById("queue-sidebar"),
   queueCount: document.getElementById("queue-count"),
@@ -3148,12 +3152,33 @@ async function init() {
   // Check cookies status on load
   updateCookiesStatus();
 
+  // Sidebar toggle
+  DOM.toggleSidebarBtn.addEventListener("click", () => {
+    DOM.leftSidebar.classList.toggle("collapsed");
+    localStorage.setItem(
+      "leftSidebarCollapsed",
+      DOM.leftSidebar.classList.contains("collapsed")
+    );
+  });
+
+  // Restore sidebar state
+  if (localStorage.getItem("leftSidebarCollapsed") === "true") {
+    DOM.leftSidebar.classList.add("collapsed");
+  }
+  if (localStorage.getItem("queueSidebarCollapsed") === "true") {
+    DOM.queueSidebar.classList.add("collapsed");
+  }
+
   // Queue event listeners
   DOM.addAllToQueueBtn.addEventListener("click", addAllToQueue);
   DOM.processQueueBtn.addEventListener("click", processQueue);
   DOM.clearQueueBtn.addEventListener("click", clearQueue);
   DOM.toggleQueueBtn.addEventListener("click", () => {
     DOM.queueSidebar.classList.toggle("collapsed");
+    localStorage.setItem(
+      "queueSidebarCollapsed",
+      DOM.queueSidebar.classList.contains("collapsed")
+    );
   });
 
   // Server queue event listeners

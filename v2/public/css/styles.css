@@ -1628,6 +1628,42 @@ input, textarea, select, button {
   color: var(--text-primary);
 }
 
+/* ============ Left Sidebar Collapse ============ */
+.sidebar {
+  position: relative;
+  transition: width 0.3s ease;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  transition: transform 0.3s ease;
+}
+
+.sidebar.collapsed .sidebar-toggle {
+  transform: rotate(180deg);
+  right: 50%;
+  margin-right: -12px;
+}
+
+.sidebar.collapsed {
+  width: 50px !important;
+  min-width: 50px;
+  overflow: hidden;
+}
+
+.sidebar.collapsed .sidebar-section {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-toggle {
+  display: flex;
+}
+
 /* ============ Queue Sidebar ============ */
 .queue-sidebar {
   width: 320px;
@@ -1636,23 +1672,38 @@ input, textarea, select, button {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  transition: width 0.3s ease, margin-right 0.3s ease;
+  transition: width 0.3s ease;
+  position: relative;
 }
 
 .queue-sidebar.collapsed {
   width: 50px;
+  overflow: hidden;
 }
 
-.queue-sidebar.collapsed .queue-content,
-.queue-sidebar.collapsed .queue-header h3 span,
-.queue-sidebar.collapsed .queue-header h3 svg {
+.queue-sidebar.collapsed .queue-content {
   display: none;
+}
+
+.queue-sidebar.collapsed .queue-header {
+  flex-direction: column;
+  padding: var(--space-sm);
 }
 
 .queue-sidebar.collapsed .queue-header h3 {
   writing-mode: vertical-rl;
   text-orientation: mixed;
-  padding: var(--space-md);
+  font-size: 0.75rem;
+}
+
+.queue-sidebar.collapsed .queue-header h3 svg,
+.queue-sidebar.collapsed .queue-header h3 .queue-count {
+  display: none;
+}
+
+.queue-sidebar.collapsed #toggle-queue-btn {
+  transform: rotate(180deg);
+  margin-top: var(--space-sm);
 }
 
 .queue-header {

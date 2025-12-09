@@ -2144,3 +2144,24 @@ body.production-mode .local-only {
 .btn-danger:hover {
   background: #c0392b;
 }
+
+/* Language Switcher */
+.language-select {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.language-select:hover {
+  border-color: var(--accent-primary);
+}
+
+.language-select:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}

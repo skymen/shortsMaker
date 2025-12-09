@@ -1105,6 +1105,9 @@ const DOM = {
 
   // Toast
   toastContainer: document.getElementById("toast-container"),
+
+  // Language
+  languageSelect: document.getElementById("language-select"),
 };
 
 // ============ Utility Functions ============
@@ -2922,6 +2925,15 @@ function handleVideoSearch() {
 
 // ============ Initialize ============
 async function init() {
+  // Initialize i18n
+  if (typeof i18n !== "undefined") {
+    i18n.init();
+    DOM.languageSelect.value = i18n.getLanguage();
+    DOM.languageSelect.addEventListener("change", (e) => {
+      i18n.setLanguage(e.target.value);
+    });
+  }
+
   // Check environment (production vs development)
   try {
     const env = await API.getEnvironment();

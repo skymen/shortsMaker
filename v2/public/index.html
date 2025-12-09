@@ -30,10 +30,14 @@
               <polygon points="5 3 19 12 5 21 5 3"></polygon>
             </svg>
           </div>
-          <h1>Shorts Maker</h1>
+          <h1 data-i18n="appTitle">Shorts Maker</h1>
           <span class="version">v2</span>
         </div>
         <div class="header-actions">
+          <select id="language-select" class="language-select" title="Language">
+            <option value="en">🇬🇧 EN</option>
+            <option value="fr">🇫🇷 FR</option>
+          </select>
           <button id="auth-btn" class="btn btn-outline">
             <svg
               viewBox="0 0 24 24"
@@ -44,7 +48,7 @@
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
               <circle cx="12" cy="7" r="4"></circle>
             </svg>
-            <span>Sign In</span>
+            <span data-i18n="signIn">Sign In</span>
           </button>
         </div>
       </header>
@@ -68,11 +72,12 @@
             </svg>
           </button>
           <div class="sidebar-section sidebar-section-channel">
-            <h3>Channel</h3>
+            <h3 data-i18n="channel">Channel</h3>
             <div class="search-box">
               <input
                 type="text"
                 id="channel-search"
+                data-i18n-placeholder="searchChannels"
                 placeholder="Search YouTube channels..."
               />
               <button id="search-btn" class="btn-icon">
@@ -92,12 +97,13 @@
           </div>
 
           <div class="sidebar-section sidebar-section-videos">
-            <h3>Videos</h3>
+            <h3 data-i18n="videos">Videos</h3>
             <!-- Video Search -->
             <div class="video-search-box">
               <input
                 type="text"
                 id="video-search"
+                data-i18n-placeholder="searchVideos"
                 placeholder="Search videos..."
               />
               <svg
@@ -112,12 +118,34 @@
             </div>
             <!-- Filter Tabs -->
             <div class="filter-tabs">
-              <button class="filter-tab active" data-filter="all">All</button>
-              <button class="filter-tab" data-filter="pending">Pending</button>
-              <button class="filter-tab" data-filter="finished">
+              <button
+                class="filter-tab active"
+                data-filter="all"
+                data-i18n="all"
+              >
+                All
+              </button>
+              <button
+                class="filter-tab"
+                data-filter="pending"
+                data-i18n="inProgress"
+              >
+                In Progress
+              </button>
+              <button
+                class="filter-tab"
+                data-filter="finished"
+                data-i18n="finished"
+              >
                 Finished
               </button>
-              <button class="filter-tab" data-filter="ignored">Ignored</button>
+              <button
+                class="filter-tab"
+                data-filter="ignored"
+                data-i18n="ignored"
+              >
+                Ignored
+              </button>
             </div>
             <div id="video-list" class="video-list">
               <div class="empty-state">
@@ -169,8 +197,10 @@
                 <polygon points="23 7 16 12 23 17 23 7"></polygon>
                 <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
               </svg>
-              <h2>Select a Video</h2>
-              <p>Choose a video from the sidebar to start creating shorts</p>
+              <h2 data-i18n="selectVideo">Select a Video</h2>
+              <p data-i18n="clickVideoToEdit">
+                Choose a video from the sidebar to start creating shorts
+              </p>
             </div>
           </div>
 
@@ -249,7 +279,7 @@
                         <line x1="12" y1="5" x2="12" y2="19"></line>
                         <line x1="5" y1="12" x2="19" y2="12"></line>
                       </svg>
-                      Add Seam
+                      <span data-i18n="addSeam">Add Seam</span>
                     </button>
                   </div>
                 </div>
@@ -268,7 +298,7 @@
               <div class="editor-right">
                 <div class="segments-panel">
                   <div class="panel-header">
-                    <h3>Segments</h3>
+                    <h3 data-i18n="segments">Segments</h3>
                     <div class="panel-actions">
                       <button
                         id="save-seams-btn"
@@ -371,16 +401,18 @@
                   ></rect>
                   <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                 </svg>
-                <p>Sign in with YouTube to upload your shorts</p>
+                <p data-i18n="pleaseSignIn">
+                  Sign in with YouTube to upload your shorts
+                </p>
                 <button id="upload-auth-btn" class="btn btn-primary">
-                  Sign In
+                  <span data-i18n="signIn">Sign In</span>
                 </button>
               </div>
               <div id="upload-controls" class="upload-controls hidden">
                 <div class="upload-form">
                   <div class="form-row">
                     <div class="form-group">
-                      <label>Title Template</label>
+                      <label data-i18n="titleTemplate">Title Template</label>
                       <input
                         type="text"
                         id="upload-title"
@@ -393,24 +425,31 @@
                       >
                     </div>
                     <div class="form-group">
-                      <label>Privacy</label>
+                      <label data-i18n="privacy">Privacy</label>
                       <select id="upload-privacy">
-                        <option value="private">Private</option>
-                        <option value="unlisted">Unlisted</option>
-                        <option value="public">Public</option>
+                        <option value="private" data-i18n="private">
+                          Private
+                        </option>
+                        <option value="unlisted" data-i18n="unlisted">
+                          Unlisted
+                        </option>
+                        <option value="public" data-i18n="public">
+                          Public
+                        </option>
                       </select>
                     </div>
                   </div>
                   <div class="form-group">
-                    <label>Description</label>
+                    <label data-i18n="description">Description</label>
                     <textarea
                       id="upload-description"
                       rows="2"
+                      data-i18n-placeholder="descriptionPlaceholder"
                       placeholder="Description for your shorts..."
                     ></textarea>
                   </div>
                   <div class="form-group">
-                    <label>Tags</label>
+                    <label data-i18n="tags">Tags</label>
                     <input
                       type="text"
                       id="upload-tags"
@@ -420,15 +459,17 @@
                   <div class="form-group form-group-checkbox">
                     <label class="checkbox-label">
                       <input type="checkbox" id="prefer-local-processing" />
-                      <span>Process locally (FFmpeg.wasm)</span>
+                      <span data-i18n="processLocally"
+                        >Process locally (FFmpeg.wasm)</span
+                      >
                     </label>
-                    <small class="form-hint"
+                    <small class="form-hint" data-i18n="processLocallyHint"
                       >Uses your device for video processing instead of server.
                       Faster for slow servers.</small
                     >
                   </div>
                   <div class="form-group">
-                    <label>YouTube Cookies</label>
+                    <label data-i18n="youtubeCookies">YouTube Cookies</label>
                     <div class="cookies-upload-row">
                       <span id="cookies-status" class="cookies-status"
                         >Checking...</span
@@ -500,7 +541,7 @@
                 <line x1="3" y1="12" x2="3.01" y2="12"></line>
                 <line x1="3" y1="18" x2="3.01" y2="18"></line>
               </svg>
-              Queue
+              <span data-i18n="queueTitle">Queue</span>
               <span class="queue-count" id="queue-count">0</span>
             </h3>
             <button id="toggle-queue-btn" class="btn-icon" title="Toggle queue">
@@ -531,7 +572,7 @@
                 >
                   <polygon points="5 3 19 12 5 21 5 3"></polygon>
                 </svg>
-                Process
+                <span data-i18n="process">Process</span>
               </button>
               <button
                 id="send-to-server-btn"
@@ -549,7 +590,7 @@
                   <path d="M22 2L11 13"></path>
                   <path d="M22 2L15 22L11 13L2 9L22 2Z"></path>
                 </svg>
-                Sync to Server
+                <span data-i18n="syncToServer">Sync to Server</span>
               </button>
               <button id="clear-queue-btn" class="btn btn-small" disabled>
                 <svg
@@ -565,7 +606,7 @@
                     d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
                   ></path>
                 </svg>
-                Clear
+                <span data-i18n="clear">Clear</span>
               </button>
             </div>
             <div class="queue-actions queue-server-actions">
@@ -585,14 +626,16 @@
                   <line x1="8" y1="21" x2="16" y2="21"></line>
                   <line x1="12" y1="17" x2="12" y2="21"></line>
                 </svg>
-                Server Queue
+                <span data-i18n="serverQueue">Server Queue</span>
                 <span class="server-queue-badge" id="server-queue-badge"></span>
               </button>
             </div>
             <div class="queue-list" id="queue-list">
               <div class="queue-empty">
-                <p>Queue is empty</p>
-                <small>Add segments to start processing</small>
+                <p data-i18n="queueEmpty">Queue is empty</p>
+                <small data-i18n="addSegmentsToStart"
+                  >Add segments to start processing</small
+                >
               </div>
             </div>
           </div>
@@ -858,6 +901,7 @@
     <script src="/assets/ffmpeg/ffmpeg.js"></script>
     <script src="/assets/ffmpeg/ffmpeg-util.js"></script>
 
+    <script src="js/i18n.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/app.js"></script>
   </body>

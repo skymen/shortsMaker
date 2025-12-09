@@ -8,6 +8,8 @@ const state = {
   authenticated: false,
   selectedChannel: null,
   videos: [],
+  originalVideos: [], // Store original videos when searching
+  isSearching: false, // Track if we're in search mode
   selectedVideo: null,
   seams: [],
   segmentNames: [],
@@ -87,6 +89,18 @@ const API = {
     if (pageToken) url += `&pageToken=${pageToken}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error("Failed to get videos");
+    return res.json();
+  },
+
+  async searchChannelVideos(channelId, query, pageToken = null) {
+    let url = `${
+      this.baseUrl
+    }/api/youtube/channel/${channelId}/search?query=${encodeURIComponent(
+      query
+    )}&maxResults=20`;
+    if (pageToken) url += `&pageToken=${pageToken}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Failed to search videos");
     return res.json();
   },
 
@@ -1357,12 +1371,16 @@ async function selectChannel(channelId, channels) {
 function clearChannel() {
   state.selectedChannel = null;
   state.videos = [];
+  state.originalVideos = [];
+  state.isSearching = false;
+  state.videoSearchQuery = "";
   StorageManager.clearSelectedChannel();
 
   DOM.selectedChannel.classList.add("hidden");
   DOM.channelResults.classList.remove("hidden");
   DOM.channelResults.innerHTML = "";
   DOM.channelSearch.value = "";
+  DOM.videoSearch.value = "";
   renderVideoList();
 }
 
@@ -1392,12 +1410,7 @@ function renderVideoList() {
 
   let filteredVideos = state.videos;
 
-  // Apply search filter
-  if (searchQuery) {
-    filteredVideos = filteredVideos.filter((v) =>
-      v.title.toLowerCase().includes(searchQuery)
-    );
-  }
+  // Note: search filtering is now done via API, not locally
 
   // Apply status filter
   if (state.currentFilter === "finished") {
@@ -3279,9 +3292,45 @@ function setFilter(filter) {
 }
 
 // ============ Video Search ============
-function handleVideoSearch() {
-  state.videoSearchQuery = DOM.videoSearch.value.trim();
-  renderVideoList();
+async function handleVideoSearch() {
+  const query = DOM.videoSearch.value.trim();
+  state.videoSearchQuery = query;
+
+  if (!state.selectedChannel) {
+    renderVideoList();
+    return;
+  }
+
+  // If search is cleared, restore original videos
+  if (!query) {
+    if (state.isSearching) {
+      state.videos = state.originalVideos;
+      state.isSearching = false;
+      state.pagination.nextToken = null;
+      state.pagination.prevToken = null;
+      await loadChannelVideos(); // Reload to get proper pagination
+    }
+    renderVideoList();
+    return;
+  }
+
+  // Save original videos if not already searching
+  if (!state.isSearching) {
+    state.originalVideos = [...state.videos];
+    state.isSearching = true;
+  }
+
+  try {
+    const data = await API.searchChannelVideos(state.selectedChannel.id, query);
+    state.videos = data.videos;
+    state.pagination.nextToken = data.nextPageToken;
+    state.pagination.prevToken = data.prevPageToken;
+    renderVideoList();
+    updatePagination();
+  } catch (e) {
+    console.error("Search error:", e);
+    showToast("error", "Search failed", e.message);
+  }
 }
 
 // ============ Initialize ============

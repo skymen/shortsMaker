@@ -65,6 +65,25 @@ const youtube = google.youtube({ version: "v3", auth: oauth2Client });
 // Store tokens in memory (in production, use a database)
 let userTokens = null;
 
+// ============ HELPER FUNCTIONS ============
+
+// Parse ISO 8601 duration to seconds
+function parseDurationToSeconds(duration) {
+  if (!duration) return 0;
+  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return 0;
+  const hours = parseInt(match[1] || 0);
+  const minutes = parseInt(match[2] || 0);
+  const seconds = parseInt(match[3] || 0);
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+// Check if a video is a YouTube Short (under 3 minutes)
+function isYouTubeShort(video) {
+  const durationSeconds = parseDurationToSeconds(video.duration);
+  return durationSeconds > 0 && durationSeconds <= 180;
+}
+
 // ============ AUTH ROUTES ============
 
 // Generate auth URL
@@ -180,22 +199,25 @@ app.get("/api/youtube/channel/:channelId/videos", async (req, res) => {
     });
 
     // Merge video details
-    const videos = videosResponse.data.items.map((item) => {
-      const details = videoDetailsResponse.data.items.find(
-        (v) => v.id === item.contentDetails.videoId
-      );
-      return {
-        id: item.contentDetails.videoId,
-        title: item.snippet.title,
-        description: item.snippet.description,
-        thumbnail:
-          item.snippet.thumbnails.high?.url ||
-          item.snippet.thumbnails.default?.url,
-        publishedAt: item.snippet.publishedAt,
-        duration: details?.contentDetails?.duration || "PT0S",
-        viewCount: details?.statistics?.viewCount || "0",
-      };
-    });
+    const videos = videosResponse.data.items
+      .map((item) => {
+        const details = videoDetailsResponse.data.items.find(
+          (v) => v.id === item.contentDetails.videoId
+        );
+        return {
+          id: item.contentDetails.videoId,
+          title: item.snippet.title,
+          description: item.snippet.description,
+          thumbnail:
+            item.snippet.thumbnails.high?.url ||
+            item.snippet.thumbnails.default?.url,
+          publishedAt: item.snippet.publishedAt,
+          duration: details?.contentDetails?.duration || "PT0S",
+          viewCount: details?.statistics?.viewCount || "0",
+        };
+      })
+      // Filter out YouTube Shorts (videos under 3 minutes)
+      .filter((video) => !isYouTubeShort(video));
 
     res.json({
       channel: {
@@ -211,6 +233,79 @@ app.get("/api/youtube/channel/:channelId/videos", async (req, res) => {
   } catch (error) {
     console.error("Get videos error:", error);
     res.status(500).json({ error: "Failed to get channel videos" });
+  }
+});
+
+// Search videos within a channel
+app.get("/api/youtube/channel/:channelId/search", async (req, res) => {
+  const { channelId } = req.params;
+  const { query, pageToken, maxResults = 20 } = req.query;
+
+  if (!query || !query.trim()) {
+    return res.status(400).json({ error: "Search query is required" });
+  }
+
+  try {
+    // Use YouTube search API to search within the channel
+    const searchResponse = await google.youtube("v3").search.list({
+      key: process.env.YOUTUBE_API_KEY,
+      part: "snippet",
+      channelId: channelId,
+      q: query,
+      type: "video",
+      maxResults: parseInt(maxResults),
+      pageToken: pageToken || undefined,
+      order: "relevance",
+    });
+
+    if (!searchResponse.data.items || searchResponse.data.items.length === 0) {
+      return res.json({
+        videos: [],
+        nextPageToken: null,
+        prevPageToken: null,
+        totalResults: 0,
+      });
+    }
+
+    // Get video details (duration, statistics)
+    const videoIds = searchResponse.data.items.map((item) => item.id.videoId);
+
+    const videoDetailsResponse = await google.youtube("v3").videos.list({
+      key: process.env.YOUTUBE_API_KEY,
+      part: "contentDetails,statistics",
+      id: videoIds.join(","),
+    });
+
+    // Merge search results with video details
+    const videos = searchResponse.data.items
+      .map((item) => {
+        const details = videoDetailsResponse.data.items.find(
+          (v) => v.id === item.id.videoId
+        );
+        return {
+          id: item.id.videoId,
+          title: item.snippet.title,
+          description: item.snippet.description,
+          thumbnail:
+            item.snippet.thumbnails.high?.url ||
+            item.snippet.thumbnails.default?.url,
+          publishedAt: item.snippet.publishedAt,
+          duration: details?.contentDetails?.duration || "PT0S",
+          viewCount: details?.statistics?.viewCount || "0",
+        };
+      })
+      // Filter out YouTube Shorts (videos under 3 minutes)
+      .filter((video) => !isYouTubeShort(video));
+
+    res.json({
+      videos,
+      nextPageToken: searchResponse.data.nextPageToken,
+      prevPageToken: searchResponse.data.prevPageToken,
+      totalResults: searchResponse.data.pageInfo.totalResults,
+    });
+  } catch (error) {
+    console.error("Search videos error:", error);
+    res.status(500).json({ error: "Failed to search videos" });
   }
 });
 
